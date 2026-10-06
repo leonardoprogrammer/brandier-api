@@ -1,5 +1,6 @@
 package com.leonardoprogrammer.brandier_api.service;
 
+import com.leonardoprogrammer.brandier_api.email.EmailCanonicalizer;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -8,7 +9,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Locale;
 
 @Service
 public class UsuarioService implements UserDetailsService {
@@ -21,7 +21,7 @@ public class UsuarioService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return usuarioRepository.findByEmail(email)
+        return usuarioRepository.findByEmailCanonico(EmailCanonicalizer.canonicalize(email))
                 .map(user -> org.springframework.security.core.userdetails.User
                         .withUsername(user.getEmail())
                         .password(user.getSenha())
@@ -30,11 +30,7 @@ public class UsuarioService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("Usuário não encontrado com o e-mail: " + email));
     }
     public Usuario getUsuarioByEmail(String email) {
-        return usuarioRepository.findByEmail(email).orElse(null);
-    }
-
-    public static String normalizarEmail(String email) {
-        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
+        return usuarioRepository.findByEmailCanonico(EmailCanonicalizer.canonicalize(email)).orElse(null);
     }
 
 }

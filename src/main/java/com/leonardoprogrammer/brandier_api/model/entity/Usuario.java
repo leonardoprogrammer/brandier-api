@@ -20,6 +20,9 @@ public class Usuario {
     @Column(nullable = false, unique = true, length = 254)
     private String email;
 
+    @Column(nullable = false, unique = true, length = 254)
+    private String emailCanonico;
+
     @Column(nullable = false, length = 100)
     private String senha;
 
@@ -79,6 +82,14 @@ public class Usuario {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getEmailCanonico() {
+        return emailCanonico;
+    }
+
+    public void setEmailCanonico(String emailCanonico) {
+        this.emailCanonico = emailCanonico;
     }
 
     public String getSenha() {

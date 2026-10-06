@@ -1,8 +1,11 @@
 package com.leonardoprogrammer.brandier_api.service;
 
+import com.leonardoprogrammer.brandier_api.email.DisposableEmailDomains;
+import com.leonardoprogrammer.brandier_api.email.EmailCanonicalizer;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.event.VerificationEmailRequested;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
+import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,31 +23,40 @@ public class CadastroService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
+    private final DisposableEmailDomains disposableEmailDomains;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public CadastroService(UsuarioRepository usuarioRepository,
                            PasswordEncoder passwordEncoder,
                            EmailVerificationService emailVerificationService,
+                           DisposableEmailDomains disposableEmailDomains,
                            ApplicationEventPublisher eventPublisher,
                            Clock clock) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailVerificationService = emailVerificationService;
+        this.disposableEmailDomains = disposableEmailDomains;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
     @Transactional
     public void cadastrar(String nome, String email, String senha) {
-        String emailNormalizado = UsuarioService.normalizarEmail(email);
+        String emailNormalizado = EmailCanonicalizer.normalize(email);
+        if (disposableEmailDomains.isDisposable(emailNormalizado)) {
+            throw new BusinessRuleException(ErrorCode.EMAIL_DESCARTAVEL);
+        }
+
+        String emailCanonico = EmailCanonicalizer.canonicalize(emailNormalizado);
         String senhaHash = passwordEncoder.encode(senha);
-        Optional<Usuario> existente = usuarioRepository.findByEmail(emailNormalizado);
+        Optional<Usuario> existente = usuarioRepository.findByEmailCanonico(emailCanonico);
 
         if (existente.isEmpty()) {
             Usuario novo = new Usuario();
             novo.setNome(nome.trim());
             novo.setEmail(emailNormalizado);
+            novo.setEmailCanonico(emailCanonico);
             novo.setSenha(senhaHash);
             novo.setStatus(StatusUsuario.PENDENTE);
             novo.setTermosAceitosEm(Instant.now(clock));
@@ -76,7 +88,7 @@ public class CadastroService {
 
     @Transactional
     public void reenviarVerificacao(String email) {
-        usuarioRepository.findByEmail(UsuarioService.normalizarEmail(email))
+        usuarioRepository.findByEmailCanonico(EmailCanonicalizer.canonicalize(email))
                 .filter(usuario -> usuario.getStatus() == StatusUsuario.PENDENTE)
                 .ifPresent(this::enviarVerificacao);
     }

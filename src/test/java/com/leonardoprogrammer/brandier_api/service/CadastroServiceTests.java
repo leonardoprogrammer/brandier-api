@@ -1,5 +1,6 @@
 package com.leonardoprogrammer.brandier_api.service;
 
+import com.leonardoprogrammer.brandier_api.email.DisposableEmailDomains;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.event.VerificationEmailRequested;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
@@ -44,6 +45,9 @@ class CadastroServiceTests {
     private EmailVerificationService emailVerificationService;
 
     @Mock
+    private DisposableEmailDomains disposableEmailDomains;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private CadastroService cadastroService;
@@ -51,13 +55,13 @@ class CadastroServiceTests {
     @BeforeEach
     void preparar() {
         cadastroService = new CadastroService(usuarioRepository, passwordEncoder, emailVerificationService,
-                eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC));
+                disposableEmailDomains, eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC));
         lenient().when(passwordEncoder.encode(any())).thenReturn("hash-da-senha");
     }
 
     @Test
     void cadastrarEmailNovoCriaUsuarioPendenteComSenhaEmHashEEnviaVerificacao() {
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.empty());
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.empty());
         when(emailVerificationService.issue(any())).thenReturn(Optional.of("token-bruto"));
 
         cadastroService.cadastrar("  Pessoa Teste ", "  Pessoa@Exemplo.COM ", "Senha1234");
@@ -67,6 +71,7 @@ class CadastroServiceTests {
         Usuario salvo = capturado.getValue();
         assertThat(salvo.getNome()).isEqualTo("Pessoa Teste");
         assertThat(salvo.getEmail()).isEqualTo("pessoa@exemplo.com");
+        assertThat(salvo.getEmailCanonico()).isEqualTo("pessoa@exemplo.com");
         assertThat(salvo.getSenha()).isEqualTo("hash-da-senha").isNotEqualTo("Senha1234");
         assertThat(salvo.getStatus()).isEqualTo(StatusUsuario.PENDENTE);
         assertThat(salvo.getTermosAceitosEm()).isEqualTo(AGORA);
@@ -81,7 +86,7 @@ class CadastroServiceTests {
     @Test
     void cadastrarEmailDeContaAtivaNaoAlteraNadaENaoEnviaEmail() {
         Usuario ativo = usuario(StatusUsuario.ATIVO);
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.of(ativo));
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.of(ativo));
 
         cadastroService.cadastrar("Outro Nome", "pessoa@exemplo.com", "OutraSenha1");
 
@@ -94,7 +99,7 @@ class CadastroServiceTests {
     @Test
     void cadastrarEmailDeContaPendenteAtualizaOsDadosEReenviaAVerificacao() {
         Usuario pendente = usuario(StatusUsuario.PENDENTE);
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
         when(emailVerificationService.issue(pendente)).thenReturn(Optional.of("novo-token"));
 
         cadastroService.cadastrar("Nome Novo", "pessoa@exemplo.com", "SenhaNova1");
@@ -109,7 +114,7 @@ class CadastroServiceTests {
     @Test
     void cadastrarEmailDeContaPendenteDentroDoIntervaloNaoAlteraNadaENaoEnviaEmail() {
         Usuario pendente = usuario(StatusUsuario.PENDENTE);
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
         when(emailVerificationService.issue(pendente)).thenReturn(Optional.empty());
 
         cadastroService.cadastrar("Nome Novo", "pessoa@exemplo.com", "SenhaNova1");
@@ -122,7 +127,7 @@ class CadastroServiceTests {
 
     @Test
     void cadastrarEmailNovoDentroDoIntervaloSalvaUsuarioMasNaoPublicaEvento() {
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.empty());
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.empty());
         when(emailVerificationService.issue(any())).thenReturn(Optional.empty());
 
         cadastroService.cadastrar("Pessoa", "pessoa@exemplo.com", "Senha1234");
@@ -157,7 +162,7 @@ class CadastroServiceTests {
     @Test
     void reenviarVerificacaoParaContaPendentePublicaOEvento() {
         Usuario pendente = usuario(StatusUsuario.PENDENTE);
-        when(usuarioRepository.findByEmail("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.of(pendente));
         when(emailVerificationService.issue(pendente)).thenReturn(Optional.of("token-reenviado"));
 
         cadastroService.reenviarVerificacao("  PESSOA@exemplo.com ");
@@ -169,14 +174,63 @@ class CadastroServiceTests {
 
     @Test
     void reenviarVerificacaoParaContaAtivaOuInexistenteNaoFazNada() {
-        when(usuarioRepository.findByEmail("ativa@exemplo.com")).thenReturn(Optional.of(usuario(StatusUsuario.ATIVO)));
-        when(usuarioRepository.findByEmail("nao-existe@exemplo.com")).thenReturn(Optional.empty());
+        when(usuarioRepository.findByEmailCanonico("ativa@exemplo.com")).thenReturn(Optional.of(usuario(StatusUsuario.ATIVO)));
+        when(usuarioRepository.findByEmailCanonico("nao-existe@exemplo.com")).thenReturn(Optional.empty());
 
         cadastroService.reenviarVerificacao("ativa@exemplo.com");
         cadastroService.reenviarVerificacao("nao-existe@exemplo.com");
 
         verify(emailVerificationService, never()).issue(any());
         verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void cadastrarComEmailDescartavelLancaErroENaoSalvaNemEnviaNada() {
+        when(disposableEmailDomains.isDisposable("pessoa@mailinator.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> cadastroService.cadastrar("Pessoa", " Pessoa@Mailinator.com ", "Senha1234"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        erro -> assertThat(erro.getErrorCode()).isEqualTo(ErrorCode.EMAIL_DESCARTAVEL));
+
+        verify(usuarioRepository, never()).findByEmailCanonico(any());
+        verify(usuarioRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void cadastrarComAliasDoGmailGuardaOEmailDigitadoEOCanonico() {
+        when(usuarioRepository.findByEmailCanonico("pessoa@gmail.com")).thenReturn(Optional.empty());
+        when(emailVerificationService.issue(any())).thenReturn(Optional.of("token-bruto"));
+
+        cadastroService.cadastrar("Pessoa", "Pe.ssoa+brandier@GoogleMail.com", "Senha1234");
+
+        ArgumentCaptor<Usuario> capturado = ArgumentCaptor.forClass(Usuario.class);
+        verify(usuarioRepository).save(capturado.capture());
+        assertThat(capturado.getValue().getEmail()).isEqualTo("pe.ssoa+brandier@googlemail.com");
+        assertThat(capturado.getValue().getEmailCanonico()).isEqualTo("pessoa@gmail.com");
+    }
+
+    @Test
+    void cadastrarComAliasDeContaAtivaNaoCriaOutraContaNemEnviaEmail() {
+        Usuario ativo = usuario(StatusUsuario.ATIVO);
+        when(usuarioRepository.findByEmailCanonico("pessoa@gmail.com")).thenReturn(Optional.of(ativo));
+
+        cadastroService.cadastrar("Outra Pessoa", "p.e.s.s.o.a+outra@gmail.com", "OutraSenha1");
+
+        verify(usuarioRepository, never()).save(any());
+        verify(emailVerificationService, never()).issue(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void reenviarVerificacaoEncontraContaPendentePorAlias() {
+        Usuario pendente = usuario(StatusUsuario.PENDENTE);
+        when(usuarioRepository.findByEmailCanonico("pessoa@gmail.com")).thenReturn(Optional.of(pendente));
+        when(emailVerificationService.issue(pendente)).thenReturn(Optional.of("token-reenviado"));
+
+        cadastroService.reenviarVerificacao("pessoa+teste@gmail.com");
+
+        verify(eventPublisher).publishEvent(any(VerificationEmailRequested.class));
     }
 
     private Usuario usuario(StatusUsuario status) {

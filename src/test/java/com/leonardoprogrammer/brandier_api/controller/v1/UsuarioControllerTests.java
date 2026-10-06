@@ -262,6 +262,18 @@ class UsuarioControllerTests {
     }
 
     @Test
+    void cadastroComEmailDescartavelRetornaErroPadronizado() throws Exception {
+        doThrow(new BusinessRuleException(ErrorCode.EMAIL_DESCARTAVEL))
+                .when(cadastroService).cadastrar(anyString(), anyString(), anyString());
+
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCadastro("Pessoa Teste", "pessoa@mailinator.com", "Senha1234", true)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("EMAIL_DESCARTAVEL"));
+    }
+
+    @Test
     void cadastroInvalidoRetornaErrosPorCampoENaoChamaOServico() throws Exception {
         mockMvc.perform(post("/v1/usuario")
                         .contentType(MediaType.APPLICATION_JSON)

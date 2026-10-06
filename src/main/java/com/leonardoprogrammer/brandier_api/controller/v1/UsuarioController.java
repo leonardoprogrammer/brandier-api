@@ -1,6 +1,7 @@
 package com.leonardoprogrammer.brandier_api.controller.v1;
 
 import com.leonardoprogrammer.brandier_api.config.ApiVersion;
+import com.leonardoprogrammer.brandier_api.email.EmailCanonicalizer;
 import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 import com.leonardoprogrammer.brandier_api.model.dto.*;
@@ -72,7 +73,7 @@ public class UsuarioController {
     public ResponseEntity<UsuarioDTO> usuarioLogin(@Valid @RequestBody RequestLoginDTO requestLoginDTO,
                                                    HttpServletRequest request,
                                                    HttpServletResponse response) {
-        String email = UsuarioService.normalizarEmail(requestLoginDTO.getEmail());
+        String email = EmailCanonicalizer.normalize(requestLoginDTO.getEmail());
         String accessToken = jwtService.authenticate(email, requestLoginDTO.getSenha());
         Usuario usuario = usuarioService.getUsuarioByEmail(email);
         if (usuario.getStatus() != StatusUsuario.ATIVO) {
