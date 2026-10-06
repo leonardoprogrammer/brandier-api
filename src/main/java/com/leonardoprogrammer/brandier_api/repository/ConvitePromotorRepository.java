@@ -2,6 +2,7 @@ package com.leonardoprogrammer.brandier_api.repository;
 
 import com.leonardoprogrammer.brandier_api.enums.StatusConvite;
 import com.leonardoprogrammer.brandier_api.model.entity.ConvitePromotor;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,11 @@ import java.util.UUID;
 public interface ConvitePromotorRepository extends JpaRepository<ConvitePromotor, UUID> {
 
     Optional<ConvitePromotor> findByTokenHash(String tokenHash);
+
+    @EntityGraph(attributePaths = {"marca", "marca.gestor"})
+    List<ConvitePromotor> findAllByEmailCanonicoAndStatusAndExpiraEmAfterOrderByCriadoEmDesc(String emailCanonico,
+                                                                                              StatusConvite status,
+                                                                                              Instant agora);
 
     List<ConvitePromotor> findAllByMarcaIdOrderByCriadoEmDesc(UUID marcaId);
 

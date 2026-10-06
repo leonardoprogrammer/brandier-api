@@ -110,6 +110,9 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `DELETE` | `/marcas/{marcaId}/convites/{id}` | Cancela ou remove um convite (`204`) | Gestor da marca |
 | `POST` | `/convites/consultar` | Mostra o convite do token (no corpo) | Autenticado |
 | `POST` | `/convites/aceitar` | Aceita o convite e vira promotor | Autenticado |
+| `GET` | `/convites/recebidos` | Convites pendentes endereçados ao e-mail do usuário | Autenticado |
+| `POST` | `/convites/{id}/aceitar` | Aceita um convite recebido, pelo id | Autenticado |
+| `POST` | `/convites/{id}/recusar` | Recusa um convite recebido, pelo id (`204`) | Autenticado |
 | `POST` | `/convites/recusar` | Recusa o convite (`204`) | Autenticado |
 | `GET` | `/promotores/eu` | Marcas em que o usuário é promotor | Autenticado |
 | `DELETE` | `/promotores/eu/{marcaId}` | O usuário sai da marca (`204`) | Promotor da marca |
@@ -130,6 +133,8 @@ Marca de outro usuário responde `404`. O limite de marcas por conta (`brandier.
 Lojas e produtos seguem a mesma regra, com o lock na linha da **marca**: até 5 lojas (`brandier.limits.max-stores-per-brand`, `LIMITE_LOJAS_ATINGIDO`) e 10 produtos (`brandier.limits.max-products-per-brand`, `LIMITE_PRODUTOS_ATINGIDO`) por marca, com nome único dentro da marca (`LOJA_NOME_DUPLICADO`, `PRODUTO_NOME_DUPLICADO`). Escrever (criar, alterar, excluir) é só do gestor da marca; ler a lista de lojas e de produtos também é permitido aos promotores. Quem não tem vínculo com a marca recebe `404`, nunca `403`.
 
 **Promotores e convites.** O gestor convida por e-mail; o convite tem token de uso único (guardado só como hash), vale 7 dias (`brandier.invitation.expiration-days`) e só pode ser aceito pela conta com o mesmo e-mail (aliases do Gmail e similares contam como o mesmo). A resposta é a mesma exista ou não conta para o e-mail. O limite de 5 por marca (`brandier.limits.max-promoters-per-brand`) conta promotores **e** convites pendentes, também sob lock da marca. Remover um promotor não apaga as reposições dele.
+
+O convidado também vê os convites pendentes dentro da plataforma (`GET /convites/recebidos`) e responde pelo id, com as mesmas regras do link do e-mail: só a conta com o e-mail convidado enxerga e responde, e qualquer outro id responde `404`.
 
 **Reposições.** Uma reposição tem loja, data e hora, itens (produto + quantidade inteira maior que zero, sem repetir produto) e observações. O gestor altera e exclui qualquer reposição da marca; o promotor, só as próprias e até 24 horas depois do registro (`brandier.replenishment.edit-window-hours`), caso contrário `403 JANELA_EDICAO_ENCERRADA`. Produto com reposições não é excluído: fica inativo e deixa de contar no limite. Loja com reposições não pode ser excluída (`409 LOJA_COM_REPOSICOES`).
 

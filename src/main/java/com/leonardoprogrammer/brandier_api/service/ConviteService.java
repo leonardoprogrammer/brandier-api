@@ -6,6 +6,7 @@ import com.leonardoprogrammer.brandier_api.enums.StatusConvite;
 import com.leonardoprogrammer.brandier_api.event.ConviteEmailRequested;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
+import com.leonardoprogrammer.brandier_api.model.dto.ConvitePendenteDTO;
 import com.leonardoprogrammer.brandier_api.model.dto.ConviteRecebidoDTO;
 import com.leonardoprogrammer.brandier_api.model.dto.VinculoPromotorDTO;
 import com.leonardoprogrammer.brandier_api.model.entity.ConvitePromotor;
@@ -25,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Service
 public class ConviteService {
@@ -116,11 +119,42 @@ public class ConviteService {
         return ConviteRecebidoDTO.de(buscarValido(usuario, token, Instant.now(clock)));
     }
 
+    @Transactional(readOnly = true)
+    public List<ConvitePendenteDTO> listarRecebidos(Usuario usuario) {
+        return conviteRepository
+                .findAllByEmailCanonicoAndStatusAndExpiraEmAfterOrderByCriadoEmDesc(
+                        usuario.getEmailCanonico(), StatusConvite.PENDENTE, Instant.now(clock))
+                .stream()
+                .filter(convite -> !convite.getMarca().getGestor().getId().equals(usuario.getId()))
+                .map(ConvitePendenteDTO::de)
+                .toList();
+    }
+
     @Transactional
     public VinculoPromotorDTO aceitar(Usuario usuario, String token) {
         Instant agora = Instant.now(clock);
-        ConvitePromotor convite = buscarValido(usuario, token, agora);
+        return concluirAceite(buscarValido(usuario, token, agora), usuario, agora);
+    }
 
+    @Transactional
+    public VinculoPromotorDTO aceitarPorId(Usuario usuario, UUID conviteId) {
+        Instant agora = Instant.now(clock);
+        return concluirAceite(buscarValidoPorId(usuario, conviteId, agora), usuario, agora);
+    }
+
+    @Transactional
+    public void recusar(Usuario usuario, String token) {
+        Instant agora = Instant.now(clock);
+        concluirRecusa(buscarValido(usuario, token, agora), agora, ConviteService::conviteInvalido);
+    }
+
+    @Transactional
+    public void recusarPorId(Usuario usuario, UUID conviteId) {
+        Instant agora = Instant.now(clock);
+        concluirRecusa(buscarValidoPorId(usuario, conviteId, agora), agora, ConviteService::naoEncontrado);
+    }
+
+    private VinculoPromotorDTO concluirAceite(ConvitePromotor convite, Usuario usuario, Instant agora) {
         if (conviteRepository.responderSePendente(convite.getId(), StatusConvite.ACEITO, StatusConvite.PENDENTE, agora) == 0) {
             throw conviteInvalido();
         }
@@ -136,28 +170,34 @@ public class ConviteService {
         return VinculoPromotorDTO.de(promotor);
     }
 
-    @Transactional
-    public void recusar(Usuario usuario, String token) {
-        Instant agora = Instant.now(clock);
-        ConvitePromotor convite = buscarValido(usuario, token, agora);
-
+    private void concluirRecusa(ConvitePromotor convite, Instant agora, Supplier<BusinessRuleException> erro) {
         if (conviteRepository.responderSePendente(convite.getId(), StatusConvite.RECUSADO, StatusConvite.PENDENTE, agora) == 0) {
-            throw conviteInvalido();
+            throw erro.get();
         }
     }
 
     private ConvitePromotor buscarValido(Usuario usuario, String token, Instant agora) {
         ConvitePromotor convite = conviteRepository.findByTokenHash(OpaqueTokens.hash(token))
                 .orElseThrow(ConviteService::conviteInvalido);
-
-        boolean valido = convite.getStatus() == StatusConvite.PENDENTE
-                && convite.getExpiraEm().isAfter(agora)
-                && convite.getEmailCanonico().equals(usuario.getEmailCanonico())
-                && !convite.getMarca().getGestor().getId().equals(usuario.getId());
-        if (!valido) {
+        if (!destinadoA(convite, usuario, agora)) {
             throw conviteInvalido();
         }
         return convite;
+    }
+
+    private ConvitePromotor buscarValidoPorId(Usuario usuario, UUID conviteId, Instant agora) {
+        ConvitePromotor convite = conviteRepository.findById(conviteId).orElseThrow(ConviteService::naoEncontrado);
+        if (!destinadoA(convite, usuario, agora)) {
+            throw naoEncontrado();
+        }
+        return convite;
+    }
+
+    private static boolean destinadoA(ConvitePromotor convite, Usuario usuario, Instant agora) {
+        return convite.getStatus() == StatusConvite.PENDENTE
+                && convite.getExpiraEm().isAfter(agora)
+                && convite.getEmailCanonico().equals(usuario.getEmailCanonico())
+                && !convite.getMarca().getGestor().getId().equals(usuario.getId());
     }
 
     private static BusinessRuleException conviteInvalido() {

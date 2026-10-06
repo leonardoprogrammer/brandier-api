@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.exception.GlobalExceptionHandler;
+import com.leonardoprogrammer.brandier_api.model.dto.ConvitePendenteDTO;
 import com.leonardoprogrammer.brandier_api.model.dto.ConviteRecebidoDTO;
 import com.leonardoprogrammer.brandier_api.model.dto.VinculoPromotorDTO;
 import com.leonardoprogrammer.brandier_api.model.entity.Marca;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -142,6 +144,79 @@ class ConviteRecebidoControllerTests {
 
         mockMvc.perform(post("/v1/convites/recusar").principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON).content(CORPO))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void recebidosListaOsConvitesPendentesSemExporToken() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(conviteService.listarRecebidos(usuario)).thenReturn(List.of(
+                new ConvitePendenteDTO(id, "Marca Alfa", "Gestor Silva", Instant.parse("2026-03-08T12:00:00Z"), Instant.parse("2026-03-01T12:00:00Z"))));
+
+        mockMvc.perform(get("/v1/convites/recebidos").principal(autenticacao))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.convites.length()").value(1))
+                .andExpect(jsonPath("$.convites[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.convites[0].marcaNome").value("Marca Alfa"))
+                .andExpect(jsonPath("$.convites[0].gestorNome").value("Gestor Silva"))
+                .andExpect(jsonPath("$.convites[0].expiraEm").value("2026-03-08T12:00:00Z"))
+                .andExpect(jsonPath("$.convites[0].token").doesNotExist())
+                .andExpect(jsonPath("$.convites[0].tokenHash").doesNotExist());
+    }
+
+    @Test
+    void recebidosSemConvitesDevolveListaVazia() throws Exception {
+        when(conviteService.listarRecebidos(usuario)).thenReturn(List.of());
+
+        mockMvc.perform(get("/v1/convites/recebidos").principal(autenticacao))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.convites.length()").value(0));
+    }
+
+    @Test
+    void aceitarPorIdDevolveOVinculoCriado() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(conviteService.aceitarPorId(usuario, id)).thenReturn(new VinculoPromotorDTO(
+                marca.getId(), "Marca Alfa", "Gestor Silva", Instant.parse("2026-03-01T12:00:00Z")));
+
+        mockMvc.perform(post("/v1/convites/" + id + "/aceitar").principal(autenticacao))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marcaNome").value("Marca Alfa"))
+                .andExpect(jsonPath("$.entrouEm").value("2026-03-01T12:00:00Z"));
+    }
+
+    @Test
+    void aceitarPorIdDeConviteAlheioDevolve404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(conviteService.aceitarPorId(usuario, id)).thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
+
+        mockMvc.perform(post("/v1/convites/" + id + "/aceitar").principal(autenticacao))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("RECURSO_NAO_ENCONTRADO"));
+    }
+
+    @Test
+    void recusarPorIdDevolve204() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/v1/convites/" + id + "/recusar").principal(autenticacao))
+                .andExpect(status().isNoContent());
+
+        verify(conviteService).recusarPorId(usuario, id);
+    }
+
+    @Test
+    void recusarPorIdDeConviteAlheioDevolve404() throws Exception {
+        UUID id = UUID.randomUUID();
+        doThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO)).when(conviteService).recusarPorId(usuario, id);
+
+        mockMvc.perform(post("/v1/convites/" + id + "/recusar").principal(autenticacao))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void idQueNaoEUuidDevolve400() throws Exception {
+        mockMvc.perform(post("/v1/convites/nao-e-uuid/aceitar").principal(autenticacao))
                 .andExpect(status().isBadRequest());
     }
 
