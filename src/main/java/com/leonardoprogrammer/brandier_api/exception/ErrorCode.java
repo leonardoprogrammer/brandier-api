@@ -11,6 +11,8 @@ public enum ErrorCode {
     TOKEN_ATUALIZACAO_INVALIDO(HttpStatus.UNAUTHORIZED, "Sessão inválida", "O token de atualização é inválido, expirou ou já foi utilizado."),
     ACESSO_NEGADO(HttpStatus.FORBIDDEN, "Acesso negado", "Você não tem permissão para acessar este recurso."),
     CSRF_INVALIDO(HttpStatus.FORBIDDEN, "Requisição não autorizada", "O token CSRF está ausente ou é inválido."),
+    EMAIL_NAO_VERIFICADO(HttpStatus.FORBIDDEN, "E-mail não verificado", "Confirme seu e-mail para acessar a conta. Se precisar, reenvie o link de verificação."),
+    TOKEN_VERIFICACAO_INVALIDO(HttpStatus.BAD_REQUEST, "Link inválido", "O link de verificação é inválido, expirou ou já foi utilizado."),
     RECURSO_NAO_ENCONTRADO(HttpStatus.NOT_FOUND, "Recurso não encontrado", "O recurso solicitado não foi encontrado."),
     METODO_NAO_PERMITIDO(HttpStatus.METHOD_NOT_ALLOWED, "Método não permitido", "O método HTTP não é permitido para este recurso."),
     MIDIA_NAO_SUPORTADA(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Tipo de conteúdo não suportado", "O tipo de conteúdo enviado não é suportado."),

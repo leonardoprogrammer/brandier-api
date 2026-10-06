@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class UsuarioService implements UserDetailsService {
@@ -30,6 +31,10 @@ public class UsuarioService implements UserDetailsService {
     }
     public Usuario getUsuarioByEmail(String email) {
         return usuarioRepository.findByEmail(email).orElse(null);
+    }
+
+    public static String normalizarEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(Locale.ROOT);
     }
 
 }

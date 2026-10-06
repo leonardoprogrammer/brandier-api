@@ -7,11 +7,14 @@ import com.leonardoprogrammer.brandier_api.model.dto.*;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
 import com.leonardoprogrammer.brandier_api.security.JwtService;
+import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
+import com.leonardoprogrammer.brandier_api.service.CadastroService;
 import com.leonardoprogrammer.brandier_api.service.RefreshTokenService;
 import com.leonardoprogrammer.brandier_api.service.UsuarioService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,23 +32,52 @@ public class UsuarioController {
     private final UsuarioService usuarioService;
     private final RefreshTokenService refreshTokenService;
     private final AuthCookies authCookies;
+    private final CadastroService cadastroService;
 
     public UsuarioController(JwtService jwtService,
                              UsuarioService usuarioService,
                              RefreshTokenService refreshTokenService,
-                             AuthCookies authCookies) {
+                             AuthCookies authCookies,
+                             CadastroService cadastroService) {
         this.jwtService = jwtService;
         this.usuarioService = usuarioService;
         this.refreshTokenService = refreshTokenService;
         this.authCookies = authCookies;
+        this.cadastroService = cadastroService;
+    }
+
+    @PostMapping
+    public ResponseEntity<ResponseMessageDTO> cadastro(@Valid @RequestBody RequestCadastroDTO requestCadastroDTO) {
+        try {
+            cadastroService.cadastrar(requestCadastroDTO.getNome(), requestCadastroDTO.getEmail(), requestCadastroDTO.getSenha());
+        } catch (DataIntegrityViolationException e) {
+            return respostaCadastro();
+        }
+        return respostaCadastro();
+    }
+
+    @PostMapping("/verificar-email")
+    public ResponseEntity<ResponseMessageDTO> verificarEmail(@Valid @RequestBody RequestVerificarEmailDTO requestVerificarEmailDTO) {
+        cadastroService.verificarEmail(requestVerificarEmailDTO.getToken());
+        return ResponseEntity.ok(new ResponseMessageDTO("E-mail verificado com sucesso. Você já pode entrar."));
+    }
+
+    @PostMapping("/reenviar-verificacao")
+    public ResponseEntity<ResponseMessageDTO> reenviarVerificacao(@Valid @RequestBody RequestReenviarVerificacaoDTO requestReenviarVerificacaoDTO) {
+        cadastroService.reenviarVerificacao(requestReenviarVerificacaoDTO.getEmail());
+        return respostaCadastro();
     }
 
     @PostMapping("/login")
     public ResponseEntity<UsuarioDTO> usuarioLogin(@Valid @RequestBody RequestLoginDTO requestLoginDTO,
                                                    HttpServletRequest request,
                                                    HttpServletResponse response) {
-        String accessToken = jwtService.authenticate(requestLoginDTO.getEmail(), requestLoginDTO.getSenha());
-        Usuario usuario = usuarioService.getUsuarioByEmail(requestLoginDTO.getEmail());
+        String email = UsuarioService.normalizarEmail(requestLoginDTO.getEmail());
+        String accessToken = jwtService.authenticate(email, requestLoginDTO.getSenha());
+        Usuario usuario = usuarioService.getUsuarioByEmail(email);
+        if (usuario.getStatus() != StatusUsuario.ATIVO) {
+            throw new BusinessRuleException(ErrorCode.EMAIL_NAO_VERIFICADO);
+        }
         String refreshToken = refreshTokenService.issue(usuario);
 
         authCookies.addAccess(request, response, accessToken);
@@ -85,6 +117,11 @@ public class UsuarioController {
     public ResponseEntity<UsuarioDTO> eu(Authentication authentication) {
         Usuario usuario = usuarioService.getUsuarioByEmail(authentication.getName());
         return ResponseEntity.ok(paraDTO(usuario));
+    }
+
+    private ResponseEntity<ResponseMessageDTO> respostaCadastro() {
+        return ResponseEntity.accepted().body(new ResponseMessageDTO(
+                "Se o e-mail puder ser usado, enviaremos um link de verificação. Verifique sua caixa de entrada."));
     }
 
     private UsuarioDTO paraDTO(Usuario usuario) {

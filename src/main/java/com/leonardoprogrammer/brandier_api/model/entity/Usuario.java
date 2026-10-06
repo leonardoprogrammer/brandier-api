@@ -27,6 +27,9 @@ public class Usuario {
     @Column(nullable = false, length = 20)
     private StatusUsuario status = StatusUsuario.PENDENTE;
 
+    @Column
+    private Instant termosAceitosEm;
+
     @Column(nullable = false)
     private Instant criadoEm;
 
@@ -44,6 +47,14 @@ public class Usuario {
     @PreUpdate
     void aoAtualizar() {
         atualizadoEm = Instant.now();
+    }
+
+    public Instant getTermosAceitosEm() {
+        return termosAceitosEm;
+    }
+
+    public void setTermosAceitosEm(Instant termosAceitosEm) {
+        this.termosAceitosEm = termosAceitosEm;
     }
 
     public UUID getId() {
