@@ -6,6 +6,7 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 import com.leonardoprogrammer.brandier_api.model.dto.*;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
+import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
 import com.leonardoprogrammer.brandier_api.security.JwtService;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
@@ -29,26 +30,34 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(ApiVersion.V1 + "/usuario")
 public class UsuarioController {
 
+    private static final String OPERATION_VERIFY_EMAIL = "verify-email";
+    private static final String OPERATION_RESEND_VERIFICATION = "resend-verification";
+
     private final JwtService jwtService;
     private final UsuarioService usuarioService;
     private final RefreshTokenService refreshTokenService;
     private final AuthCookies authCookies;
     private final CadastroService cadastroService;
+    private final AuthRateLimiter rateLimiter;
 
     public UsuarioController(JwtService jwtService,
                              UsuarioService usuarioService,
                              RefreshTokenService refreshTokenService,
                              AuthCookies authCookies,
-                             CadastroService cadastroService) {
+                             CadastroService cadastroService,
+                             AuthRateLimiter rateLimiter) {
         this.jwtService = jwtService;
         this.usuarioService = usuarioService;
         this.refreshTokenService = refreshTokenService;
         this.authCookies = authCookies;
         this.cadastroService = cadastroService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping
-    public ResponseEntity<ResponseMessageDTO> cadastro(@Valid @RequestBody RequestCadastroDTO requestCadastroDTO) {
+    public ResponseEntity<ResponseMessageDTO> cadastro(@Valid @RequestBody RequestCadastroDTO requestCadastroDTO,
+                                                       HttpServletRequest request) {
+        rateLimiter.checkSignup(request.getRemoteAddr());
         try {
             cadastroService.cadastrar(requestCadastroDTO.getNome(), requestCadastroDTO.getEmail(), requestCadastroDTO.getSenha());
         } catch (DataIntegrityViolationException e) {
@@ -58,13 +67,18 @@ public class UsuarioController {
     }
 
     @PostMapping("/verificar-email")
-    public ResponseEntity<ResponseMessageDTO> verificarEmail(@Valid @RequestBody RequestVerificarEmailDTO requestVerificarEmailDTO) {
+    public ResponseEntity<ResponseMessageDTO> verificarEmail(@Valid @RequestBody RequestVerificarEmailDTO requestVerificarEmailDTO,
+                                                             HttpServletRequest request) {
+        rateLimiter.checkToken(OPERATION_VERIFY_EMAIL, request.getRemoteAddr());
         cadastroService.verificarEmail(requestVerificarEmailDTO.getToken());
         return ResponseEntity.ok(new ResponseMessageDTO("E-mail verificado com sucesso. Você já pode entrar."));
     }
 
     @PostMapping("/reenviar-verificacao")
-    public ResponseEntity<ResponseMessageDTO> reenviarVerificacao(@Valid @RequestBody RequestReenviarVerificacaoDTO requestReenviarVerificacaoDTO) {
+    public ResponseEntity<ResponseMessageDTO> reenviarVerificacao(@Valid @RequestBody RequestReenviarVerificacaoDTO requestReenviarVerificacaoDTO,
+                                                                  HttpServletRequest request) {
+        rateLimiter.checkRecovery(OPERATION_RESEND_VERIFICATION, request.getRemoteAddr(),
+                EmailCanonicalizer.canonicalize(requestReenviarVerificacaoDTO.getEmail()));
         cadastroService.reenviarVerificacao(requestReenviarVerificacaoDTO.getEmail());
         return respostaCadastro();
     }
@@ -74,6 +88,7 @@ public class UsuarioController {
                                                    HttpServletRequest request,
                                                    HttpServletResponse response) {
         String email = EmailCanonicalizer.normalize(requestLoginDTO.getEmail());
+        rateLimiter.checkLogin(request.getRemoteAddr(), EmailCanonicalizer.canonicalize(email));
         String accessToken = jwtService.authenticate(email, requestLoginDTO.getSenha());
         Usuario usuario = usuarioService.getUsuarioByEmail(email);
         if (usuario.getStatus() != StatusUsuario.ATIVO) {

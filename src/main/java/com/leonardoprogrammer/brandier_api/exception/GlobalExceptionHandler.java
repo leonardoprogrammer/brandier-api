@@ -1,5 +1,6 @@
 package com.leonardoprogrammer.brandier_api.exception;
 
+import com.leonardoprogrammer.brandier_api.ratelimit.RateLimitExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -32,6 +33,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleRateLimit(RateLimitExceededException ex) {
+        long seconds = Math.max(1, (long) Math.ceil(ex.getRetryAfter().toMillis() / 1000.0));
+        ProblemDetail problem = Problems.create(ErrorCode.MUITAS_TENTATIVAS,
+                "Muitas tentativas. Tente novamente em " + describeWait(seconds) + ".");
+        problem.setProperty("tentarNovamenteEmSegundos", seconds);
+        return ResponseEntity.status(problem.getStatus())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(seconds))
+                .body(problem);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
         ProblemDetail problem = Problems.create(ErrorCode.ACESSO_NEGADO);
@@ -49,6 +61,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.error("Erro inesperado", ex);
         ProblemDetail problem = Problems.create(ErrorCode.ERRO_INTERNO);
         return ResponseEntity.status(problem.getStatus()).body(problem);
+    }
+
+    private static String describeWait(long seconds) {
+        if (seconds < 60) {
+            return seconds + (seconds == 1 ? " segundo" : " segundos");
+        }
+        long minutes = (seconds + 59) / 60;
+        return minutes + (minutes == 1 ? " minuto" : " minutos");
     }
 
     @Override

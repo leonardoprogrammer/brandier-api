@@ -5,6 +5,8 @@ import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
 import com.leonardoprogrammer.brandier_api.security.JwtService;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
+import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
+import com.leonardoprogrammer.brandier_api.ratelimit.RateLimitExceededException;
 import com.leonardoprogrammer.brandier_api.service.CadastroService;
 import com.leonardoprogrammer.brandier_api.service.RefreshTokenService;
 import com.leonardoprogrammer.brandier_api.service.UsuarioService;
@@ -28,6 +30,7 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,6 +46,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -63,13 +67,16 @@ class UsuarioControllerTests {
     @Mock
     private CadastroService cadastroService;
 
+    @Mock
+    private AuthRateLimiter rateLimiter;
+
     private MockMvc mockMvc;
     private Usuario usuario;
 
     @BeforeEach
     void preparar() {
         AuthCookies cookies = new AuthCookies(true, 900_000, 604_800_000);
-        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService);
+        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService, rateLimiter);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -259,6 +266,81 @@ class UsuarioControllerTests {
                         .content(corpoCadastro("Pessoa Teste", EMAIL, "Senha1234", true)))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void loginBloqueadoPeloLimiteRetorna429ComTempoDeEsperaENaoAutentica() throws Exception {
+        doThrow(new RateLimitExceededException(Duration.ofMinutes(7)))
+                .when(rateLimiter).checkLogin(anyString(), anyString());
+
+        MvcResult resultado = mockMvc.perform(post("/v1/usuario/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + EMAIL + "\",\"senha\":\"qualquer\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "420"))
+                .andExpect(jsonPath("$.codigo").value("MUITAS_TENTATIVAS"))
+                .andExpect(jsonPath("$.tentarNovamenteEmSegundos").value(420))
+                .andExpect(jsonPath("$.detail").value("Muitas tentativas. Tente novamente em 7 minutos."))
+                .andReturn();
+
+        assertThat(resultado.getResponse().getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
+        verify(jwtService, never()).authenticate(anyString(), anyString());
+    }
+
+    @Test
+    void loginConsultaOLimitadorComOIpEOEmailCanonico() throws Exception {
+        when(jwtService.authenticate(EMAIL, "senha-correta")).thenReturn("jwt-de-acesso");
+        when(usuarioService.getUsuarioByEmail(EMAIL)).thenReturn(usuario);
+        when(refreshTokenService.issue(usuario)).thenReturn("token-de-atualizacao");
+
+        mockMvc.perform(post("/v1/usuario/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"Pe.ssoa+x@Gmail.com\",\"senha\":\"senha-correta\"}"))
+                .andReturn();
+
+        verify(rateLimiter).checkLogin("127.0.0.1", "pessoa@gmail.com");
+    }
+
+    @Test
+    void cadastroBloqueadoPeloLimiteRetorna429SemChamarOServico() throws Exception {
+        doThrow(new RateLimitExceededException(Duration.ofSeconds(30)))
+                .when(rateLimiter).checkSignup(anyString());
+
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCadastro("Pessoa Teste", EMAIL, "Senha1234", true)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "30"))
+                .andExpect(jsonPath("$.detail").value("Muitas tentativas. Tente novamente em 30 segundos."));
+
+        verify(cadastroService, never()).cadastrar(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void reenviarVerificacaoBloqueadoPeloLimiteRetorna429() throws Exception {
+        doThrow(new RateLimitExceededException(Duration.ofMinutes(1)))
+                .when(rateLimiter).checkRecovery(anyString(), anyString(), anyString());
+
+        mockMvc.perform(post("/v1/usuario/reenviar-verificacao")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + EMAIL + "\"}"))
+                .andExpect(status().isTooManyRequests());
+
+        verify(cadastroService, never()).reenviarVerificacao(anyString());
+    }
+
+    @Test
+    void verificarEmailBloqueadoPeloLimiteRetorna429() throws Exception {
+        doThrow(new RateLimitExceededException(Duration.ofSeconds(1)))
+                .when(rateLimiter).checkToken(anyString(), anyString());
+
+        mockMvc.perform(post("/v1/usuario/verificar-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"abc\"}"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.detail").value("Muitas tentativas. Tente novamente em 1 segundo."));
+
+        verify(cadastroService, never()).verificarEmail(anyString());
     }
 
     @Test

@@ -81,6 +81,11 @@ public class RefreshTokenService {
                 .ifPresent(token -> refreshTokenRepository.revokeIfActive(token.getId(), Instant.now(clock)));
     }
 
+    @Transactional
+    public void revokeAll(UUID usuarioId) {
+        refreshTokenRepository.revokeAllByUsuario(usuarioId, Instant.now(clock));
+    }
+
     private static BusinessRuleException invalidToken() {
         return new BusinessRuleException(ErrorCode.TOKEN_ATUALIZACAO_INVALIDO);
     }

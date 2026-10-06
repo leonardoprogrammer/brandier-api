@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 
 @Documented
 @Constraint(validatedBy = MaxBytesValidator.class)
-@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Target({ElementType.FIELD, ElementType.PARAMETER, ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface MaxBytes {
 

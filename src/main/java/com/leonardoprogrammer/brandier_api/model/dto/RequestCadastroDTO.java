@@ -1,10 +1,9 @@
 package com.leonardoprogrammer.brandier_api.model.dto;
 
-import com.leonardoprogrammer.brandier_api.validation.MaxBytes;
+import com.leonardoprogrammer.brandier_api.validation.StrongPassword;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class RequestCadastroDTO {
@@ -18,10 +17,7 @@ public class RequestCadastroDTO {
     @Size(max = 254, message = "O e-mail deve ter no máximo 254 caracteres")
     private String email;
 
-    @NotBlank(message = "Informe uma senha")
-    @Size(min = 8, max = 72, message = "A senha deve ter entre 8 e 72 caracteres")
-    @Pattern(regexp = "^(?=.*\\p{L})(?=.*\\d).*$", message = "A senha deve conter letras e números")
-    @MaxBytes(value = 72, message = "A senha é longa demais. Use menos caracteres acentuados ou especiais")
+    @StrongPassword
     private String senha;
 
     @AssertTrue(message = "É necessário aceitar os termos para criar a conta")

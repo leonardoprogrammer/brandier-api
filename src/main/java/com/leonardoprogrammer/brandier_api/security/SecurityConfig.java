@@ -67,7 +67,8 @@ public class SecurityConfig {
                         .requestMatchers(ApiVersion.V1 + "/usuario/login/**").permitAll()
                         .requestMatchers(ApiVersion.V1 + "/usuario/refresh-token/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario/logout").permitAll()
-                        .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario", ApiVersion.V1 + "/usuario/verificar-email", ApiVersion.V1 + "/usuario/reenviar-verificacao").permitAll()
+                        .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario", ApiVersion.V1 + "/usuario/verificar-email", ApiVersion.V1 + "/usuario/reenviar-verificacao",
+                                ApiVersion.V1 + "/usuario/esqueci-senha", ApiVersion.V1 + "/usuario/redefinir-senha").permitAll()
                         .requestMatchers("/version").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/error").permitAll()

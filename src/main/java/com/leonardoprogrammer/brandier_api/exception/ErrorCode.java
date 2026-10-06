@@ -12,6 +12,8 @@ public enum ErrorCode {
     ACESSO_NEGADO(HttpStatus.FORBIDDEN, "Acesso negado", "Você não tem permissão para acessar este recurso."),
     CSRF_INVALIDO(HttpStatus.FORBIDDEN, "Requisição não autorizada", "O token CSRF está ausente ou é inválido."),
     EMAIL_NAO_VERIFICADO(HttpStatus.FORBIDDEN, "E-mail não verificado", "Confirme seu e-mail para acessar a conta. Se precisar, reenvie o link de verificação."),
+    MUITAS_TENTATIVAS(HttpStatus.TOO_MANY_REQUESTS, "Muitas tentativas", "Muitas tentativas. Tente novamente mais tarde."),
+    TOKEN_REDEFINICAO_INVALIDO(HttpStatus.BAD_REQUEST, "Link inválido", "O link de redefinição de senha é inválido, expirou ou já foi utilizado."),
     EMAIL_DESCARTAVEL(HttpStatus.BAD_REQUEST, "E-mail não aceito", "E-mails temporários ou descartáveis não são aceitos. Use um e-mail permanente."),
     TOKEN_VERIFICACAO_INVALIDO(HttpStatus.BAD_REQUEST, "Link inválido", "O link de verificação é inválido, expirou ou já foi utilizado."),
     RECURSO_NAO_ENCONTRADO(HttpStatus.NOT_FOUND, "Recurso não encontrado", "O recurso solicitado não foi encontrado."),

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,20 @@ public class MailService {
         message.setTo(to);
         message.setSubject(subject);
         message.setText(body);
-        mailSender.send(message);
+        try {
+            mailSender.send(message);
+        } catch (MailAuthenticationException e) {
+            log.error("Falha de autenticação no servidor SMTP. Verifique spring.mail.username e spring.mail.password (no Gmail, use uma senha de app). Resposta do servidor: {}",
+                    rootCauseMessage(e));
+            throw e;
+        }
+    }
+
+    private static String rootCauseMessage(Throwable error) {
+        Throwable root = error;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage();
     }
 }
