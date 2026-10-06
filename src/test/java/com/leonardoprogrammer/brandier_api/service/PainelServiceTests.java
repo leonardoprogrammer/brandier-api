@@ -238,15 +238,37 @@ class PainelServiceTests {
         when(reposicaoRepository.porMarcaDoAutor(gestor.getId(), inicio, FIM_PADRAO)).thenReturn(porMarca);
         when(reposicaoRepository.porLojaDoAutor(gestor.getId(), inicio, FIM_PADRAO)).thenReturn(porLoja);
         when(reposicaoRepository.porProdutoDoAutor(gestor.getId(), inicio, FIM_PADRAO)).thenReturn(porProduto);
+        when(reposicaoRepository.existsByAutorId(gestor.getId())).thenReturn(true);
+
         when(reposicaoService.ultimasDoUsuario(gestor)).thenReturn(ultimas);
 
         PainelAutorDTO painel = service.painelDasMinhasReposicoes(gestor, null, null);
 
+        assertThat(painel.possuiReposicoes()).isTrue();
         assertThat(painel.totais()).isEqualTo(new TotaisDTO(4L, 50L));
         assertThat(painel.porMarca()).isEqualTo(porMarca);
         assertThat(painel.porLoja()).isEqualTo(porLoja);
         assertThat(painel.porProduto()).isEqualTo(porProduto);
         assertThat(painel.ultimas()).isSameAs(ultimas);
+    }
+
+    @Test
+    void possuiReposicoesConsideraQualquerDataENaoOPeriodoConsultado() {
+        when(reposicaoRepository.totaisDoAutor(any(), any(), any())).thenReturn(new TotaisDTO(0L, 0L));
+        when(reposicaoRepository.existsByAutorId(gestor.getId())).thenReturn(true);
+
+        PainelAutorDTO painel = service.painelDasMinhasReposicoes(gestor, null, null);
+
+        assertThat(painel.totais().reposicoes()).isZero();
+        assertThat(painel.possuiReposicoes()).isTrue();
+    }
+
+    @Test
+    void usuarioQueNuncaRegistrouReposicaoNaoPossuiReposicoes() {
+        when(reposicaoRepository.totaisDoAutor(any(), any(), any())).thenReturn(new TotaisDTO(0L, 0L));
+        when(reposicaoRepository.existsByAutorId(gestor.getId())).thenReturn(false);
+
+        assertThat(service.painelDasMinhasReposicoes(gestor, null, null).possuiReposicoes()).isFalse();
     }
 
     @Test

@@ -40,6 +40,8 @@ public interface ReposicaoRepository extends JpaRepository<Reposicao, UUID>, Jpa
 
     boolean existsByLojaId(UUID lojaId);
 
+    boolean existsByAutorId(UUID autorId);
+
     @Query("select new com.leonardoprogrammer.brandier_api.model.dto.TotaisDTO(count(distinct r.id), coalesce(sum(i.quantidade), 0L)) "
             + "from Reposicao r join r.itens i "
             + "where r.marca.id = :marcaId and r.repostoEm >= :de and r.repostoEm < :ate")
