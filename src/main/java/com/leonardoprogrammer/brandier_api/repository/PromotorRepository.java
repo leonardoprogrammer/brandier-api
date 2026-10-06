@@ -27,6 +27,8 @@ public interface PromotorRepository extends JpaRepository<Promotor, UUID> {
 
     boolean existsByMarcaIdAndUsuarioId(UUID marcaId, UUID usuarioId);
 
+    long countByUsuarioId(UUID usuarioId);
+
     Optional<Promotor> findByIdAndMarcaId(UUID id, UUID marcaId);
 
     Optional<Promotor> findByMarcaIdAndUsuarioId(UUID marcaId, UUID usuarioId);

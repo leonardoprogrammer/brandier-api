@@ -149,7 +149,7 @@ class PainelControllerTests {
     @Test
     void painelDasMinhasReposicoesDevolveTotaisAgregacoesEUltimas() throws Exception {
         when(painelService.painelDasMinhasReposicoes(usuario, DE, ATE)).thenReturn(new PainelAutorDTO(
-                new PeriodoDTO(DE, ATE), true, new TotaisDTO(4L, 50L),
+                new PeriodoDTO(DE, ATE), true, 2, new TotaisDTO(4L, 50L),
                 List.of(new AgregadoDTO(UUID.randomUUID(), "Alfa", 4L, 50L)),
                 List.of(new AgregadoDTO(UUID.randomUUID(), "Centro", 4L, 50L)),
                 List.of(new AgregadoDTO(UUID.randomUUID(), "Sabonete", 4L, 50L)),
@@ -158,6 +158,7 @@ class PainelControllerTests {
         mockMvc.perform(get("/v1/painel/minhas-reposicoes").param("de", "2026-02-01T00:00:00Z").param("ate", "2026-03-01T00:00:00Z").principal(autenticacao))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.possuiReposicoes").value(true))
+                .andExpect(jsonPath("$.marcasComoPromotor").value(2))
                 .andExpect(jsonPath("$.totais.reposicoes").value(4))
                 .andExpect(jsonPath("$.porMarca[0].nome").value("Alfa"))
                 .andExpect(jsonPath("$.porLoja[0].nome").value("Centro"))

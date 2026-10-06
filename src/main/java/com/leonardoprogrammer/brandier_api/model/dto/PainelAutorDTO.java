@@ -5,6 +5,7 @@ import java.util.List;
 public record PainelAutorDTO(
         PeriodoDTO periodo,
         boolean possuiReposicoes,
+        int marcasComoPromotor,
         TotaisDTO totais,
         List<AgregadoDTO> porMarca,
         List<AgregadoDTO> porLoja,

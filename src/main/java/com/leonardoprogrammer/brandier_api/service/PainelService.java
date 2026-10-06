@@ -117,6 +117,7 @@ public class PainelService {
         return new PainelAutorDTO(
                 periodo,
                 reposicaoRepository.existsByAutorId(autor.getId()),
+                (int) promotorRepository.countByUsuarioId(autor.getId()),
                 reposicaoRepository.totaisDoAutor(autor.getId(), periodo.de(), periodo.ate()),
                 reposicaoRepository.porMarcaDoAutor(autor.getId(), periodo.de(), periodo.ate()),
                 reposicaoRepository.porLojaDoAutor(autor.getId(), periodo.de(), periodo.ate()),

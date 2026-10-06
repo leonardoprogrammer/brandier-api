@@ -264,6 +264,22 @@ class PainelServiceTests {
     }
 
     @Test
+    void marcasComoPromotorContaOsVinculosDoUsuario() {
+        when(reposicaoRepository.totaisDoAutor(any(), any(), any())).thenReturn(new TotaisDTO(0L, 0L));
+        when(promotorRepository.countByUsuarioId(gestor.getId())).thenReturn(3L);
+
+        assertThat(service.painelDasMinhasReposicoes(gestor, null, null).marcasComoPromotor()).isEqualTo(3);
+    }
+
+    @Test
+    void usuarioSemVinculoDePromotorTemZeroMarcasComoPromotor() {
+        when(reposicaoRepository.totaisDoAutor(any(), any(), any())).thenReturn(new TotaisDTO(0L, 0L));
+        when(promotorRepository.countByUsuarioId(gestor.getId())).thenReturn(0L);
+
+        assertThat(service.painelDasMinhasReposicoes(gestor, null, null).marcasComoPromotor()).isZero();
+    }
+
+    @Test
     void usuarioQueNuncaRegistrouReposicaoNaoPossuiReposicoes() {
         when(reposicaoRepository.totaisDoAutor(any(), any(), any())).thenReturn(new TotaisDTO(0L, 0L));
         when(reposicaoRepository.existsByAutorId(gestor.getId())).thenReturn(false);
