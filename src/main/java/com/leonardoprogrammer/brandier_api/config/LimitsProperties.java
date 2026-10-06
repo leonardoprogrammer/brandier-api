@@ -8,5 +8,6 @@ public record LimitsProperties(
         @DefaultValue("2") int maxBrandsPerManager,
         @DefaultValue("5") int maxStoresPerBrand,
         @DefaultValue("10") int maxProductsPerBrand,
-        @DefaultValue("5") int maxPromotersPerBrand) {
+        @DefaultValue("5") int maxPromotersPerBrand,
+        @DefaultValue("500") long maxAccounts) {
 }

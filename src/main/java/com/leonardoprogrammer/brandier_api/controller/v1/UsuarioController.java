@@ -9,6 +9,7 @@ import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
 import com.leonardoprogrammer.brandier_api.security.JwtService;
+import com.leonardoprogrammer.brandier_api.security.TurnstileService;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.service.CadastroService;
 import com.leonardoprogrammer.brandier_api.service.RefreshTokenService;
@@ -39,25 +40,29 @@ public class UsuarioController {
     private final AuthCookies authCookies;
     private final CadastroService cadastroService;
     private final AuthRateLimiter rateLimiter;
+    private final TurnstileService turnstileService;
 
     public UsuarioController(JwtService jwtService,
                              UsuarioService usuarioService,
                              RefreshTokenService refreshTokenService,
                              AuthCookies authCookies,
                              CadastroService cadastroService,
-                             AuthRateLimiter rateLimiter) {
+                             AuthRateLimiter rateLimiter,
+                             TurnstileService turnstileService) {
         this.jwtService = jwtService;
         this.usuarioService = usuarioService;
         this.refreshTokenService = refreshTokenService;
         this.authCookies = authCookies;
         this.cadastroService = cadastroService;
         this.rateLimiter = rateLimiter;
+        this.turnstileService = turnstileService;
     }
 
     @PostMapping
     public ResponseEntity<ResponseMessageDTO> cadastro(@Valid @RequestBody RequestCadastroDTO requestCadastroDTO,
                                                        HttpServletRequest request) {
         rateLimiter.checkSignup(request.getRemoteAddr());
+        turnstileService.verify(requestCadastroDTO.getTurnstileToken(), request.getRemoteAddr());
         try {
             cadastroService.cadastrar(requestCadastroDTO.getNome(), requestCadastroDTO.getEmail(), requestCadastroDTO.getSenha());
         } catch (DataIntegrityViolationException e) {

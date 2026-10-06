@@ -4,6 +4,7 @@ import com.leonardoprogrammer.brandier_api.exception.GlobalExceptionHandler;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
 import com.leonardoprogrammer.brandier_api.security.JwtService;
+import com.leonardoprogrammer.brandier_api.security.TurnstileService;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.ratelimit.RateLimitExceededException;
@@ -70,13 +71,16 @@ class UsuarioControllerTests {
     @Mock
     private AuthRateLimiter rateLimiter;
 
+    @Mock
+    private TurnstileService turnstileService;
+
     private MockMvc mockMvc;
     private Usuario usuario;
 
     @BeforeEach
     void preparar() {
         AuthCookies cookies = new AuthCookies(true, 900_000, 604_800_000);
-        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService, rateLimiter);
+        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService, rateLimiter, turnstileService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -254,6 +258,66 @@ class UsuarioControllerTests {
                 .andExpect(jsonPath("$.message").exists());
 
         verify(cadastroService).cadastrar("Pessoa Teste", EMAIL, "Senha1234");
+    }
+
+    @Test
+    void cadastroVerificaOTurnstileComOTokenEOIpAntesDeChamarOServico() throws Exception {
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Pessoa Teste\",\"email\":\"" + EMAIL + "\",\"senha\":\"Senha1234\",\"aceitouTermos\":true,\"turnstileToken\":\"token-do-widget\"}"))
+                .andExpect(status().isAccepted());
+
+        org.mockito.InOrder ordem = org.mockito.Mockito.inOrder(rateLimiter, turnstileService, cadastroService);
+        ordem.verify(rateLimiter).checkSignup("127.0.0.1");
+        ordem.verify(turnstileService).verify("token-do-widget", "127.0.0.1");
+        ordem.verify(cadastroService).cadastrar("Pessoa Teste", EMAIL, "Senha1234");
+    }
+
+    @Test
+    void cadastroComTurnstileInvalidoRetorna400SemChamarOServico() throws Exception {
+        doThrow(new BusinessRuleException(ErrorCode.CAPTCHA_INVALIDO)).when(turnstileService).verify(any(), anyString());
+
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCadastro("Pessoa Teste", EMAIL, "Senha1234", true)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("CAPTCHA_INVALIDO"));
+
+        verify(cadastroService, never()).cadastrar(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void cadastroComLimiteDeContasAtingidoRetorna409() throws Exception {
+        doThrow(new BusinessRuleException(ErrorCode.LIMITE_CONTAS_ATINGIDO)).when(cadastroService).cadastrar(anyString(), anyString(), anyString());
+
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCadastro("Pessoa Teste", EMAIL, "Senha1234", true)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("LIMITE_CONTAS_ATINGIDO"));
+    }
+
+    @Test
+    void cadastroBloqueadoPeloLimiteNaoConsultaOTurnstile() throws Exception {
+        doThrow(new RateLimitExceededException(Duration.ofSeconds(30))).when(rateLimiter).checkSignup(anyString());
+
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoCadastro("Pessoa Teste", EMAIL, "Senha1234", true)))
+                .andExpect(status().isTooManyRequests());
+
+        verify(turnstileService, never()).verify(any(), anyString());
+    }
+
+    @Test
+    void cadastroComTokenDoTurnstileGrandeDemaisRetornaErroDeValidacao() throws Exception {
+        mockMvc.perform(post("/v1/usuario")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Pessoa Teste\",\"email\":\"" + EMAIL + "\",\"senha\":\"Senha1234\",\"aceitouTermos\":true,\"turnstileToken\":\"" + "x".repeat(2049) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros[?(@.campo=='turnstileToken')]").exists());
+
+        verify(cadastroService, never()).cadastrar(anyString(), anyString(), anyString());
     }
 
     @Test

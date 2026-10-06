@@ -54,7 +54,7 @@ class PromotorServiceTests {
     @BeforeEach
     void preparar() {
         service = new PromotorService(promotorRepository, conviteRepository, marcaRepository,
-                new LimitsProperties(2, 5, 10, 5), Clock.fixed(AGORA, ZoneOffset.UTC));
+                new LimitsProperties(2, 5, 10, 5, 500), Clock.fixed(AGORA, ZoneOffset.UTC));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         marca = new Marca();

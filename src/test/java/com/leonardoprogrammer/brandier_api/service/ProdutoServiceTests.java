@@ -52,7 +52,7 @@ class ProdutoServiceTests {
     @BeforeEach
     void preparar() {
         produtoService = new ProdutoService(produtoRepository, marcaRepository, acessoService, itemReposicaoRepository,
-                new LimitsProperties(2, 5, 10, 5));
+                new LimitsProperties(2, 5, 10, 5, 500));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         marca = new Marca();

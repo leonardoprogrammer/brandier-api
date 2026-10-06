@@ -55,8 +55,41 @@ class CadastroServiceTests {
     @BeforeEach
     void preparar() {
         cadastroService = new CadastroService(usuarioRepository, passwordEncoder, emailVerificationService,
-                disposableEmailDomains, eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC));
+                disposableEmailDomains, eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC),
+                new com.leonardoprogrammer.brandier_api.config.LimitsProperties(2, 5, 10, 5, 100));
         lenient().when(passwordEncoder.encode(any())).thenReturn("hash-da-senha");
+    }
+
+    @Test
+    void cadastrarComOTetoGlobalDeContasAtingidoLancaLimiteEnaoConsultaNada() {
+        when(usuarioRepository.count()).thenReturn(100L);
+
+        assertThatThrownBy(() -> cadastroService.cadastrar("Pessoa", "pessoa@exemplo.com", "Senha1234"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        erro -> assertThat(erro.getErrorCode()).isEqualTo(ErrorCode.LIMITE_CONTAS_ATINGIDO));
+
+        verify(usuarioRepository, org.mockito.Mockito.never()).findByEmailCanonico(any());
+        verify(usuarioRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void cadastrarComOTetoAtingidoRecusaTambemEmailQueJaTemConta() {
+        when(usuarioRepository.count()).thenReturn(150L);
+
+        assertThatThrownBy(() -> cadastroService.cadastrar("Pessoa", "ja.existe@exemplo.com", "Senha1234"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        erro -> assertThat(erro.getErrorCode()).isEqualTo(ErrorCode.LIMITE_CONTAS_ATINGIDO));
+    }
+
+    @Test
+    void cadastrarUmaContaAbaixoDoTetoFunciona() {
+        when(usuarioRepository.count()).thenReturn(99L);
+        when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.empty());
+        when(emailVerificationService.issue(any())).thenReturn(Optional.of("token-bruto"));
+
+        cadastroService.cadastrar("Pessoa", "pessoa@exemplo.com", "Senha1234");
+
+        verify(usuarioRepository).save(any(Usuario.class));
     }
 
     @Test

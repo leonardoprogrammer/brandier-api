@@ -1,5 +1,6 @@
 package com.leonardoprogrammer.brandier_api.service;
 
+import com.leonardoprogrammer.brandier_api.config.LimitsProperties;
 import com.leonardoprogrammer.brandier_api.email.DisposableEmailDomains;
 import com.leonardoprogrammer.brandier_api.email.EmailCanonicalizer;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
@@ -26,23 +27,30 @@ public class CadastroService {
     private final DisposableEmailDomains disposableEmailDomains;
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+    private final LimitsProperties limits;
 
     public CadastroService(UsuarioRepository usuarioRepository,
                            PasswordEncoder passwordEncoder,
                            EmailVerificationService emailVerificationService,
                            DisposableEmailDomains disposableEmailDomains,
                            ApplicationEventPublisher eventPublisher,
-                           Clock clock) {
+                           Clock clock,
+                           LimitsProperties limits) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailVerificationService = emailVerificationService;
         this.disposableEmailDomains = disposableEmailDomains;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
+        this.limits = limits;
     }
 
     @Transactional
     public void cadastrar(String nome, String email, String senha) {
+        if (usuarioRepository.count() >= limits.maxAccounts()) {
+            throw new BusinessRuleException(ErrorCode.LIMITE_CONTAS_ATINGIDO);
+        }
+
         String emailNormalizado = EmailCanonicalizer.normalize(email);
         if (disposableEmailDomains.isDisposable(emailNormalizado)) {
             throw new BusinessRuleException(ErrorCode.EMAIL_DESCARTAVEL);

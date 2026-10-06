@@ -99,6 +99,16 @@ class AuthRateLimiterTests {
     }
 
     @Test
+    void exclusaoDeContaLimitaPorUsuarioENaoAfetaOutros() {
+        authRateLimiter.checkAccountDeletion("usuario-1");
+        authRateLimiter.checkAccountDeletion("usuario-1");
+
+        assertThatThrownBy(() -> authRateLimiter.checkAccountDeletion("usuario-1"))
+                .isInstanceOf(RateLimitExceededException.class);
+        assertThatCode(() -> authRateLimiter.checkAccountDeletion("usuario-2")).doesNotThrowAnyException();
+    }
+
+    @Test
     void desabilitadoNuncaBloqueiaENuncaRegistra() {
         AuthRateLimiter desabilitado = new AuthRateLimiter(propriedades(false), limitador);
 

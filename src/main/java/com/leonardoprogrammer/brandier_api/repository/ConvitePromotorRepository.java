@@ -40,6 +40,10 @@ public interface ConvitePromotorRepository extends JpaRepository<ConvitePromotor
                             @Param("agora") Instant agora);
 
     @Modifying
+    @Query("delete from ConvitePromotor c where c.emailCanonico = :emailCanonico")
+    int deleteByEmailCanonico(@Param("emailCanonico") String emailCanonico);
+
+    @Modifying
     @Query("delete from ConvitePromotor c where c.expiraEm < :limite")
     int deleteExpired(@Param("limite") Instant limite);
 }

@@ -23,6 +23,9 @@ public class RequestCadastroDTO {
     @AssertTrue(message = "É necessário aceitar os termos para criar a conta")
     private boolean aceitouTermos;
 
+    @Size(max = 2048, message = "Verificação de segurança inválida")
+    private String turnstileToken;
+
     public String getNome() {
         return nome;
     }
@@ -37,5 +40,9 @@ public class RequestCadastroDTO {
 
     public boolean isAceitouTermos() {
         return aceitouTermos;
+    }
+
+    public String getTurnstileToken() {
+        return turnstileToken;
     }
 }

@@ -74,7 +74,7 @@ class PainelServiceTests {
     @BeforeEach
     void preparar() {
         service = new PainelService(reposicaoRepository, reposicaoService, marcaRepository, lojaRepository,
-                produtoRepository, promotorRepository, conviteRepository, new LimitsProperties(2, 5, 10, 5),
+                produtoRepository, promotorRepository, conviteRepository, new LimitsProperties(2, 5, 10, 5, 500),
                 Clock.fixed(AGORA, ZoneOffset.UTC));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());

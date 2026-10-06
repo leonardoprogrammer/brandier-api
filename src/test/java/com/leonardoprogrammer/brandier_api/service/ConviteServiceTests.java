@@ -71,7 +71,7 @@ class ConviteServiceTests {
     @BeforeEach
     void preparar() {
         service = new ConviteService(conviteRepository, promotorRepository, marcaRepository, usuarioRepository,
-                new LimitsProperties(2, 5, 10, 5), eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC), 7);
+                new LimitsProperties(2, 5, 10, 5, 500), eventPublisher, Clock.fixed(AGORA, ZoneOffset.UTC), 7);
         gestor = usuario("Gestor", "gestor@exemplo.com");
         convidado = usuario("Convidada", "convidada@exemplo.com");
         marca = new Marca();
