@@ -94,20 +94,48 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `POST` | `/marcas` | Cria uma marca (`201` com `Location`) | Autenticado |
 | `PUT` | `/marcas/{id}` | Atualiza nome e descrição | Autenticado |
 | `DELETE` | `/marcas/{id}` | Exclui a marca (`204`) | Autenticado |
-| `GET` | `/marcas/{marcaId}/lojas` | Lista as lojas da marca e o limite por marca | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/lojas` | Lista as lojas da marca e o limite por marca | Gestor ou promotor da marca |
 | `GET` | `/marcas/{marcaId}/lojas/{id}` | Detalha uma loja | Gestor da marca |
 | `POST` | `/marcas/{marcaId}/lojas` | Cria uma loja (`201` com `Location`) | Gestor da marca |
 | `PUT` | `/marcas/{marcaId}/lojas/{id}` | Atualiza nome, cidade, UF e endereço | Gestor da marca |
 | `DELETE` | `/marcas/{marcaId}/lojas/{id}` | Exclui a loja (`204`) | Gestor da marca |
-| `GET` | `/marcas/{marcaId}/produtos` | Lista o catálogo da marca e o limite por marca | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/produtos` | Lista o catálogo da marca (promotores veem só os ativos) | Gestor ou promotor da marca |
 | `GET` | `/marcas/{marcaId}/produtos/{id}` | Detalha um produto | Gestor da marca |
 | `POST` | `/marcas/{marcaId}/produtos` | Cria um produto (`201` com `Location`) | Gestor da marca |
-| `PUT` | `/marcas/{marcaId}/produtos/{id}` | Atualiza nome e código | Gestor da marca |
-| `DELETE` | `/marcas/{marcaId}/produtos/{id}` | Exclui o produto (`204`) | Gestor da marca |
+| `PUT` | `/marcas/{marcaId}/produtos/{id}` | Atualiza nome, código e, opcionalmente, `ativo` (reativa) | Gestor da marca |
+| `DELETE` | `/marcas/{marcaId}/produtos/{id}` | Exclui o produto (`204`) ou, se já tem reposições, inativa (`200`) | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/promotores` | Promotores, convites e uso do limite | Gestor da marca |
+| `DELETE` | `/marcas/{marcaId}/promotores/{id}` | Remove o promotor da marca (`204`) | Gestor da marca |
+| `POST` | `/marcas/{marcaId}/convites` | Convida um promotor por e-mail (`201`) | Gestor da marca |
+| `DELETE` | `/marcas/{marcaId}/convites/{id}` | Cancela ou remove um convite (`204`) | Gestor da marca |
+| `POST` | `/convites/consultar` | Mostra o convite do token (no corpo) | Autenticado |
+| `POST` | `/convites/aceitar` | Aceita o convite e vira promotor | Autenticado |
+| `POST` | `/convites/recusar` | Recusa o convite (`204`) | Autenticado |
+| `GET` | `/promotores/eu` | Marcas em que o usuário é promotor | Autenticado |
+| `DELETE` | `/promotores/eu/{marcaId}` | O usuário sai da marca (`204`) | Promotor da marca |
+| `GET` | `/marcas/{marcaId}/reposicoes` | Reposições da marca, paginadas (promotor vê só as próprias) | Gestor ou promotor da marca |
+| `GET` | `/marcas/{marcaId}/reposicoes/{id}` | Detalha uma reposição | Gestor ou autor |
+| `POST` | `/marcas/{marcaId}/reposicoes` | Registra uma reposição (`201`) | Gestor ou promotor da marca |
+| `PUT` | `/marcas/{marcaId}/reposicoes/{id}` | Altera uma reposição | Gestor, ou autor dentro do prazo |
+| `DELETE` | `/marcas/{marcaId}/reposicoes/{id}` | Exclui uma reposição (`204`) | Gestor, ou autor dentro do prazo |
+| `GET` | `/reposicoes` | Reposições do usuário em todas as marcas, paginadas | Autenticado |
+| `GET` | `/painel/gestor` | Painel das marcas do usuário (totais do período e uso dos limites) | Autenticado |
+| `GET` | `/marcas/{marcaId}/painel` | Painel detalhado da marca: por loja, promotor e produto | Gestor da marca |
+| `GET` | `/painel/minhas-reposicoes` | Painel das reposições do usuário (por marca, loja e produto) | Autenticado |
+| `GET` | `/marcas/{marcaId}/relatorios/reposicoes` | Relatório paginado com filtros e ordenação | Gestor ou promotor da marca |
+| `GET` | `/marcas/{marcaId}/relatorios/reposicoes/csv` | Exporta o relatório em CSV | Gestor ou promotor da marca |
 
 Marca de outro usuário responde `404`. O limite de marcas por conta (`brandier.limits.max-brands-per-manager`, padrão 2) responde `409` com o código `LIMITE_MARCAS_ATINGIDO`, e o nome repetido na mesma conta, `409` com `MARCA_NOME_DUPLICADO`. A contagem é feita com **lock pessimista** na linha do usuário, então requisições paralelas não estouram o limite.
 
-Lojas e produtos seguem a mesma regra, com o lock na linha da **marca**: até 5 lojas (`brandier.limits.max-stores-per-brand`, `LIMITE_LOJAS_ATINGIDO`) e 10 produtos (`brandier.limits.max-products-per-brand`, `LIMITE_PRODUTOS_ATINGIDO`) por marca, com nome único dentro da marca (`LOJA_NOME_DUPLICADO`, `PRODUTO_NOME_DUPLICADO`). Só o gestor da marca acessa esses recursos; loja ou produto de outra marca responde `404`.
+Lojas e produtos seguem a mesma regra, com o lock na linha da **marca**: até 5 lojas (`brandier.limits.max-stores-per-brand`, `LIMITE_LOJAS_ATINGIDO`) e 10 produtos (`brandier.limits.max-products-per-brand`, `LIMITE_PRODUTOS_ATINGIDO`) por marca, com nome único dentro da marca (`LOJA_NOME_DUPLICADO`, `PRODUTO_NOME_DUPLICADO`). Escrever (criar, alterar, excluir) é só do gestor da marca; ler a lista de lojas e de produtos também é permitido aos promotores. Quem não tem vínculo com a marca recebe `404`, nunca `403`.
+
+**Promotores e convites.** O gestor convida por e-mail; o convite tem token de uso único (guardado só como hash), vale 7 dias (`brandier.invitation.expiration-days`) e só pode ser aceito pela conta com o mesmo e-mail (aliases do Gmail e similares contam como o mesmo). A resposta é a mesma exista ou não conta para o e-mail. O limite de 5 por marca (`brandier.limits.max-promoters-per-brand`) conta promotores **e** convites pendentes, também sob lock da marca. Remover um promotor não apaga as reposições dele.
+
+**Reposições.** Uma reposição tem loja, data e hora, itens (produto + quantidade inteira maior que zero, sem repetir produto) e observações. O gestor altera e exclui qualquer reposição da marca; o promotor, só as próprias e até 24 horas depois do registro (`brandier.replenishment.edit-window-hours`), caso contrário `403 JANELA_EDICAO_ENCERRADA`. Produto com reposições não é excluído: fica inativo e deixa de contar no limite. Loja com reposições não pode ser excluída (`409 LOJA_COM_REPOSICOES`).
+
+**Painel e relatórios.** Os totais e rankings são calculados no banco (`GROUP BY`), nunca em memória. O período é `de` (inclusive) e `ate` (exclusivo), com padrão de 30 dias e máximo de 366. O relatório combina filtros (loja, promotor, produto, período), pagina no servidor e ordena por data, loja ou autor; o promotor só enxerga as próprias reposições. O CSV usa UTF-8 com BOM, separador `;` e uma linha por item, neutraliza células que começam com `=`, `+`, `-` ou `@` (injeção de fórmula) e recusa exportar mais de 5.000 reposições de uma vez.
+
+Como `spring.jpa.open-in-view` está desligado, os serviços que devolvem dados com associações lazy (convites, vínculos e reposições) montam o DTO ainda dentro da transação.
 
 A documentação interativa fica em `/api/swagger-ui.html` (e o JSON da versão em `/api/v3/api-docs/v1`).
 
@@ -144,6 +172,7 @@ Segredos e dados de ambiente **não ficam no Git**: `application.properties`, `a
 | Limite de tentativas | `brandier.rate-limit.*` |
 | Limpeza periódica | `brandier.cleanup.*` |
 | Limites de uso | `brandier.limits.*` |
+| Convites e reposições | `brandier.invitation.*`, `brandier.replenishment.*` |
 
 #### E-mail em desenvolvimento
 

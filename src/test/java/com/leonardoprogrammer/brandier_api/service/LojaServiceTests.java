@@ -8,6 +8,7 @@ import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.LojaRepository;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
+import com.leonardoprogrammer.brandier_api.repository.ReposicaoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,13 +39,20 @@ class LojaServiceTests {
     @Mock
     private MarcaRepository marcaRepository;
 
+    @Mock
+    private MarcaAcessoService acessoService;
+
+    @Mock
+    private ReposicaoRepository reposicaoRepository;
+
     private LojaService lojaService;
     private Usuario gestor;
     private Marca marca;
 
     @BeforeEach
     void preparar() {
-        lojaService = new LojaService(lojaRepository, marcaRepository, new LimitsProperties(2, 5, 10));
+        lojaService = new LojaService(lojaRepository, marcaRepository, acessoService, reposicaoRepository,
+                new LimitsProperties(2, 5, 10, 5));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         marca = new Marca();
@@ -156,20 +164,32 @@ class LojaServiceTests {
     @Test
     void listarDevolveAsLojasDaMarcaDoGestor() {
         List<Loja> lojas = List.of(loja("A"), loja("B"));
+        when(acessoService.exigir(gestor, marca.getId())).thenReturn(new MarcaAcessoService.Acesso(marca, true));
         when(lojaRepository.findAllByMarcaIdOrderByNomeAsc(marca.getId())).thenReturn(lojas);
 
         assertThat(lojaService.listar(gestor, marca.getId())).isEqualTo(lojas);
     }
 
     @Test
-    void listarMarcaDeOutroGestorLancaNaoEncontrado() {
+    void listarMarcaSemAcessoLancaNaoEncontrado() {
         UUID marcaAlheia = UUID.randomUUID();
-        when(marcaRepository.findByIdAndGestorId(marcaAlheia, gestor.getId())).thenReturn(Optional.empty());
+        when(acessoService.exigir(gestor, marcaAlheia)).thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         assertThatThrownBy(() -> lojaService.listar(gestor, marcaAlheia))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         verify(lojaRepository, never()).findAllByMarcaIdOrderByNomeAsc(any());
+    }
+
+    @Test
+    void listarPermiteLeituraParaPromotorDaMarca() {
+        Usuario promotor = new Usuario();
+        promotor.setId(UUID.randomUUID());
+        List<Loja> lojas = List.of(loja("A"));
+        when(acessoService.exigir(promotor, marca.getId())).thenReturn(new MarcaAcessoService.Acesso(marca, false));
+        when(lojaRepository.findAllByMarcaIdOrderByNomeAsc(marca.getId())).thenReturn(lojas);
+
+        assertThat(lojaService.listar(promotor, marca.getId())).isEqualTo(lojas);
     }
 
     @Test
@@ -234,6 +254,18 @@ class LojaServiceTests {
         lojaService.excluir(gestor, marca.getId(), existente.getId());
 
         verify(lojaRepository).delete(existente);
+    }
+
+    @Test
+    void excluirLojaComReposicoesLancaLojaComReposicoesENaoRemove() {
+        Loja existente = loja("A");
+        when(lojaRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+        when(reposicaoRepository.existsByLojaId(existente.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> lojaService.excluir(gestor, marca.getId(), existente.getId()))
+                .satisfies(erro -> assertErro(erro, ErrorCode.LOJA_COM_REPOSICOES));
+
+        verify(lojaRepository, never()).delete(any());
     }
 
     @Test

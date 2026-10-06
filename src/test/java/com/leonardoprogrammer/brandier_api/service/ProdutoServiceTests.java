@@ -6,6 +6,7 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Produto;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
+import com.leonardoprogrammer.brandier_api.repository.ItemReposicaoRepository;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
 import com.leonardoprogrammer.brandier_api.repository.ProdutoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,13 +39,20 @@ class ProdutoServiceTests {
     @Mock
     private MarcaRepository marcaRepository;
 
+    @Mock
+    private MarcaAcessoService acessoService;
+
+    @Mock
+    private ItemReposicaoRepository itemReposicaoRepository;
+
     private ProdutoService produtoService;
     private Usuario gestor;
     private Marca marca;
 
     @BeforeEach
     void preparar() {
-        produtoService = new ProdutoService(produtoRepository, marcaRepository, new LimitsProperties(2, 5, 10));
+        produtoService = new ProdutoService(produtoRepository, marcaRepository, acessoService, itemReposicaoRepository,
+                new LimitsProperties(2, 5, 10, 5));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         marca = new Marca();
@@ -77,7 +85,7 @@ class ProdutoServiceTests {
 
     @Test
     void criarNormalizaNomeECodigoEVinculaOProdutoAMarca() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(0L);
+        when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(0L);
 
         Produto criado = produtoService.criar(gestor, marca.getId(), "  Sabonete  ", "  SKU-1 ");
 
@@ -86,38 +94,35 @@ class ProdutoServiceTests {
         assertThat(criado.getNome()).isEqualTo("Sabonete");
         assertThat(capturado.getValue().getCodigo()).isEqualTo("SKU-1");
         assertThat(capturado.getValue().getMarca()).isSameAs(marca);
+        assertThat(capturado.getValue().isAtivo()).isTrue();
     }
 
     @Test
     void criarGuardaCodigoEmBrancoComoNulo() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(0L);
-
         assertThat(produtoService.criar(gestor, marca.getId(), "Sabonete", "   ").getCodigo()).isNull();
         assertThat(produtoService.criar(gestor, marca.getId(), "Shampoo", null).getCodigo()).isNull();
     }
 
     @Test
-    void criarTravaALinhaDaMarcaAntesDeContarOsProdutos() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(0L);
-
+    void criarTravaALinhaDaMarcaAntesDeContarOsProdutosAtivos() {
         produtoService.criar(gestor, marca.getId(), "Sabonete", null);
 
         InOrder ordem = inOrder(marcaRepository, produtoRepository);
         ordem.verify(marcaRepository).findByIdAndGestorIdForUpdate(marca.getId(), gestor.getId());
-        ordem.verify(produtoRepository).countByMarcaId(marca.getId());
+        ordem.verify(produtoRepository).countByMarcaIdAndAtivoTrue(marca.getId());
         ordem.verify(produtoRepository).save(any(Produto.class));
     }
 
     @Test
     void criarPermiteACriacaoDoUltimoProdutoDentroDoLimite() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(9L);
+        when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(9L);
 
         assertThat(produtoService.criar(gestor, marca.getId(), "Décimo", null)).isNotNull();
     }
 
     @Test
-    void criarNoLimiteLancaLimiteAtingidoENaoSalva() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(10L);
+    void criarNoLimiteDeProdutosAtivosLancaLimiteAtingidoENaoSalva() {
+        when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(10L);
 
         assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), "Décimo primeiro", null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.LIMITE_PRODUTOS_ATINGIDO));
@@ -127,7 +132,6 @@ class ProdutoServiceTests {
 
     @Test
     void criarComNomeJaUsadoNaMarcaIgnorandoMaiusculasLancaNomeDuplicado() {
-        when(produtoRepository.countByMarcaId(marca.getId())).thenReturn(1L);
         when(produtoRepository.existsByMarcaIdAndNomeIgnoreCase(marca.getId(), "Sabonete")).thenReturn(true);
 
         assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), " Sabonete ", null))
@@ -144,27 +148,39 @@ class ProdutoServiceTests {
         assertThatThrownBy(() -> produtoService.criar(gestor, marcaAlheia, "Sabonete", null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
 
-        verify(produtoRepository, never()).countByMarcaId(any());
+        verify(produtoRepository, never()).countByMarcaIdAndAtivoTrue(any());
         verify(produtoRepository, never()).save(any());
     }
 
     @Test
-    void listarDevolveOsProdutosDaMarcaDoGestor() {
+    void listarParaOGestorDevolveTodosOsProdutosInclusiveInativos() {
         List<Produto> produtos = List.of(produto("A"), produto("B"));
+        when(acessoService.exigir(gestor, marca.getId())).thenReturn(new MarcaAcessoService.Acesso(marca, true));
         when(produtoRepository.findAllByMarcaIdOrderByNomeAsc(marca.getId())).thenReturn(produtos);
 
         assertThat(produtoService.listar(gestor, marca.getId())).isEqualTo(produtos);
     }
 
     @Test
-    void listarMarcaDeOutroGestorLancaNaoEncontrado() {
+    void listarParaOPromotorDevolveSomenteProdutosAtivos() {
+        Usuario promotor = new Usuario();
+        promotor.setId(UUID.randomUUID());
+        List<Produto> ativos = List.of(produto("A"));
+        when(acessoService.exigir(promotor, marca.getId())).thenReturn(new MarcaAcessoService.Acesso(marca, false));
+        when(produtoRepository.findAllByMarcaIdAndAtivoTrueOrderByNomeAsc(marca.getId())).thenReturn(ativos);
+
+        assertThat(produtoService.listar(promotor, marca.getId())).isEqualTo(ativos);
+
+        verify(produtoRepository, never()).findAllByMarcaIdOrderByNomeAsc(any());
+    }
+
+    @Test
+    void listarSemAcessoALancaNaoEncontrado() {
         UUID marcaAlheia = UUID.randomUUID();
-        when(marcaRepository.findByIdAndGestorId(marcaAlheia, gestor.getId())).thenReturn(Optional.empty());
+        when(acessoService.exigir(gestor, marcaAlheia)).thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         assertThatThrownBy(() -> produtoService.listar(gestor, marcaAlheia))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
-
-        verify(produtoRepository, never()).findAllByMarcaIdOrderByNomeAsc(any());
     }
 
     @Test
@@ -185,14 +201,16 @@ class ProdutoServiceTests {
     }
 
     @Test
-    void atualizarAlteraOsCamposNormalizados() {
+    void atualizarAlteraOsCamposNormalizadosEMantemOStatusQuandoAtivoNaoVem() {
         Produto existente = produto("Antigo");
+        existente.setAtivo(false);
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
 
-        Produto atualizado = produtoService.atualizar(gestor, marca.getId(), existente.getId(), " Novo ", " COD-2 ");
+        Produto atualizado = produtoService.atualizar(gestor, marca.getId(), existente.getId(), " Novo ", " COD-2 ", null);
 
         assertThat(atualizado.getNome()).isEqualTo("Novo");
         assertThat(atualizado.getCodigo()).isEqualTo("COD-2");
+        assertThat(atualizado.isAtivo()).isFalse();
     }
 
     @Test
@@ -202,7 +220,7 @@ class ProdutoServiceTests {
         when(produtoRepository.existsByMarcaIdAndNomeIgnoreCaseAndIdNot(marca.getId(), "Outro", existente.getId()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Outro", null))
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Outro", null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.PRODUTO_NOME_DUPLICADO));
 
         verify(produtoRepository, never()).save(any());
@@ -213,24 +231,80 @@ class ProdutoServiceTests {
         UUID id = UUID.randomUUID();
         when(produtoRepository.findByIdAndMarcaId(id, marca.getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), id, "Nome", null))
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), id, "Nome", null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
     }
 
     @Test
-    void excluirRemoveOProdutoDaMarcaDoGestor() {
-        Produto existente = produto("A");
+    void atualizarReativaProdutoInativoQuandoHaVaga() {
+        Produto existente = produto("Antigo");
+        existente.setAtivo(false);
+        when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+        when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(9L);
+
+        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true).isAtivo()).isTrue();
+    }
+
+    @Test
+    void atualizarNaoReativaProdutoQuandoOLimiteDeAtivosFoiAtingido() {
+        Produto existente = produto("Antigo");
+        existente.setAtivo(false);
+        when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+        when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(10L);
+
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true))
+                .satisfies(erro -> assertErro(erro, ErrorCode.LIMITE_PRODUTOS_ATINGIDO));
+
+        assertThat(existente.isAtivo()).isFalse();
+        verify(produtoRepository, never()).save(any());
+    }
+
+    @Test
+    void atualizarProdutoJaAtivoNaoConsultaOLimite() {
+        Produto existente = produto("Antigo");
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
 
-        produtoService.excluir(gestor, marca.getId(), existente.getId());
+        produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true);
+
+        verify(produtoRepository, never()).countByMarcaIdAndAtivoTrue(any());
+    }
+
+    @Test
+    void atualizarPodeInativarOProduto() {
+        Produto existente = produto("Antigo");
+        when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+
+        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, false).isAtivo()).isFalse();
+    }
+
+    @Test
+    void excluirProdutoSemReposicoesRemoveDeVerdade() {
+        Produto existente = produto("A");
+        when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+        when(itemReposicaoRepository.existsByProdutoId(existente.getId())).thenReturn(false);
+
+        assertThat(produtoService.excluir(gestor, marca.getId(), existente.getId())).isEmpty();
 
         verify(produtoRepository).delete(existente);
     }
 
     @Test
+    void excluirProdutoComReposicoesApenasInativaEDevolveOProduto() {
+        Produto existente = produto("A");
+        when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
+        when(itemReposicaoRepository.existsByProdutoId(existente.getId())).thenReturn(true);
+
+        Optional<Produto> resultado = produtoService.excluir(gestor, marca.getId(), existente.getId());
+
+        assertThat(resultado).containsSame(existente);
+        assertThat(existente.isAtivo()).isFalse();
+        verify(produtoRepository, never()).delete(any());
+    }
+
+    @Test
     void excluirEmMarcaDeOutroGestorLancaNaoEncontradoENaoRemove() {
         UUID marcaAlheia = UUID.randomUUID();
-        when(marcaRepository.findByIdAndGestorId(marcaAlheia, gestor.getId())).thenReturn(Optional.empty());
+        when(marcaRepository.findByIdAndGestorIdForUpdate(marcaAlheia, gestor.getId())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> produtoService.excluir(gestor, marcaAlheia, UUID.randomUUID()))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));

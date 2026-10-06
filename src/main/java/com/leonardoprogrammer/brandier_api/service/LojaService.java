@@ -8,6 +8,7 @@ import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.LojaRepository;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
+import com.leonardoprogrammer.brandier_api.repository.ReposicaoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,13 +21,19 @@ public class LojaService {
 
     private final LojaRepository lojaRepository;
     private final MarcaRepository marcaRepository;
+    private final MarcaAcessoService acessoService;
+    private final ReposicaoRepository reposicaoRepository;
     private final LimitsProperties limits;
 
     public LojaService(LojaRepository lojaRepository,
                        MarcaRepository marcaRepository,
+                       MarcaAcessoService acessoService,
+                       ReposicaoRepository reposicaoRepository,
                        LimitsProperties limits) {
         this.lojaRepository = lojaRepository;
         this.marcaRepository = marcaRepository;
+        this.acessoService = acessoService;
+        this.reposicaoRepository = reposicaoRepository;
         this.limits = limits;
     }
 
@@ -35,8 +42,8 @@ public class LojaService {
     }
 
     @Transactional(readOnly = true)
-    public List<Loja> listar(Usuario gestor, UUID marcaId) {
-        buscarMarca(gestor, marcaId);
+    public List<Loja> listar(Usuario usuario, UUID marcaId) {
+        acessoService.exigir(usuario, marcaId);
         return lojaRepository.findAllByMarcaIdOrderByNomeAsc(marcaId);
     }
 
@@ -83,7 +90,13 @@ public class LojaService {
     @Transactional
     public void excluir(Usuario gestor, UUID marcaId, UUID id) {
         buscarMarca(gestor, marcaId);
-        lojaRepository.delete(buscarLoja(marcaId, id));
+        Loja loja = buscarLoja(marcaId, id);
+
+        if (reposicaoRepository.existsByLojaId(id)) {
+            throw new BusinessRuleException(ErrorCode.LOJA_COM_REPOSICOES);
+        }
+
+        lojaRepository.delete(loja);
     }
 
     private Marca buscarMarca(Usuario gestor, UUID marcaId) {

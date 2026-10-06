@@ -6,12 +6,14 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Produto;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
+import com.leonardoprogrammer.brandier_api.repository.ItemReposicaoRepository;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
 import com.leonardoprogrammer.brandier_api.repository.ProdutoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -19,13 +21,19 @@ public class ProdutoService {
 
     private final ProdutoRepository produtoRepository;
     private final MarcaRepository marcaRepository;
+    private final MarcaAcessoService acessoService;
+    private final ItemReposicaoRepository itemReposicaoRepository;
     private final LimitsProperties limits;
 
     public ProdutoService(ProdutoRepository produtoRepository,
                           MarcaRepository marcaRepository,
+                          MarcaAcessoService acessoService,
+                          ItemReposicaoRepository itemReposicaoRepository,
                           LimitsProperties limits) {
         this.produtoRepository = produtoRepository;
         this.marcaRepository = marcaRepository;
+        this.acessoService = acessoService;
+        this.itemReposicaoRepository = itemReposicaoRepository;
         this.limits = limits;
     }
 
@@ -34,9 +42,12 @@ public class ProdutoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Produto> listar(Usuario gestor, UUID marcaId) {
-        buscarMarca(gestor, marcaId);
-        return produtoRepository.findAllByMarcaIdOrderByNomeAsc(marcaId);
+    public List<Produto> listar(Usuario usuario, UUID marcaId) {
+        MarcaAcessoService.Acesso acesso = acessoService.exigir(usuario, marcaId);
+        if (acesso.gestor()) {
+            return produtoRepository.findAllByMarcaIdOrderByNomeAsc(marcaId);
+        }
+        return produtoRepository.findAllByMarcaIdAndAtivoTrueOrderByNomeAsc(marcaId);
     }
 
     @Transactional(readOnly = true)
@@ -50,7 +61,7 @@ public class ProdutoService {
         Marca marca = marcaRepository.findByIdAndGestorIdForUpdate(marcaId, gestor.getId())
                 .orElseThrow(ProdutoService::naoEncontrado);
 
-        if (produtoRepository.countByMarcaId(marcaId) >= limits.maxProductsPerBrand()) {
+        if (produtoRepository.countByMarcaIdAndAtivoTrue(marcaId) >= limits.maxProductsPerBrand()) {
             throw new BusinessRuleException(ErrorCode.LIMITE_PRODUTOS_ATINGIDO);
         }
 
@@ -67,8 +78,8 @@ public class ProdutoService {
     }
 
     @Transactional
-    public Produto atualizar(Usuario gestor, UUID marcaId, UUID id, String nome, String codigo) {
-        buscarMarca(gestor, marcaId);
+    public Produto atualizar(Usuario gestor, UUID marcaId, UUID id, String nome, String codigo, Boolean ativo) {
+        marcaRepository.findByIdAndGestorIdForUpdate(marcaId, gestor.getId()).orElseThrow(ProdutoService::naoEncontrado);
         Produto produto = buscarProduto(marcaId, id);
 
         String nomeNormalizado = nome.trim();
@@ -76,15 +87,31 @@ public class ProdutoService {
             throw new BusinessRuleException(ErrorCode.PRODUTO_NOME_DUPLICADO);
         }
 
+        if (ativo != null && ativo && !produto.isAtivo()
+                && produtoRepository.countByMarcaIdAndAtivoTrue(marcaId) >= limits.maxProductsPerBrand()) {
+            throw new BusinessRuleException(ErrorCode.LIMITE_PRODUTOS_ATINGIDO);
+        }
+
         produto.setNome(nomeNormalizado);
         produto.setCodigo(normalizarCodigo(codigo));
+        if (ativo != null) {
+            produto.setAtivo(ativo);
+        }
         return produtoRepository.save(produto);
     }
 
     @Transactional
-    public void excluir(Usuario gestor, UUID marcaId, UUID id) {
-        buscarMarca(gestor, marcaId);
-        produtoRepository.delete(buscarProduto(marcaId, id));
+    public Optional<Produto> excluir(Usuario gestor, UUID marcaId, UUID id) {
+        marcaRepository.findByIdAndGestorIdForUpdate(marcaId, gestor.getId()).orElseThrow(ProdutoService::naoEncontrado);
+        Produto produto = buscarProduto(marcaId, id);
+
+        if (itemReposicaoRepository.existsByProdutoId(id)) {
+            produto.setAtivo(false);
+            return Optional.of(produtoRepository.save(produto));
+        }
+
+        produtoRepository.delete(produto);
+        return Optional.empty();
     }
 
     private Marca buscarMarca(Usuario gestor, UUID marcaId) {

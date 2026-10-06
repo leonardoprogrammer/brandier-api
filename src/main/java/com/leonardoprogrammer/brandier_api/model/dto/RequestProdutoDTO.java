@@ -9,5 +9,7 @@ public record RequestProdutoDTO(
         String nome,
 
         @Size(max = 40, message = "O código deve ter no máximo 40 caracteres")
-        String codigo) {
+        String codigo,
+
+        Boolean ativo) {
 }

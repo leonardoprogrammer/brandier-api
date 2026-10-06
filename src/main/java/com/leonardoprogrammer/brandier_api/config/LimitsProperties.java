@@ -7,5 +7,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record LimitsProperties(
         @DefaultValue("2") int maxBrandsPerManager,
         @DefaultValue("5") int maxStoresPerBrand,
-        @DefaultValue("10") int maxProductsPerBrand) {
+        @DefaultValue("10") int maxProductsPerBrand,
+        @DefaultValue("5") int maxPromotersPerBrand) {
 }

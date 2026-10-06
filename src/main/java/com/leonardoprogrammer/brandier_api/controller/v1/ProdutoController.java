@@ -67,15 +67,16 @@ public class ProdutoController {
                                                 Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
         Produto produto = produtoService.atualizar(gestor, marcaId, id, requestProdutoDTO.nome(),
-                requestProdutoDTO.codigo());
+                requestProdutoDTO.codigo(), requestProdutoDTO.ativo());
         return ResponseEntity.ok(ProdutoDTO.de(produto));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> excluir(@PathVariable UUID marcaId, @PathVariable UUID id,
-                                        Authentication authentication) {
+    public ResponseEntity<ProdutoDTO> excluir(@PathVariable UUID marcaId, @PathVariable UUID id,
+                                              Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
-        produtoService.excluir(gestor, marcaId, id);
-        return ResponseEntity.noContent().build();
+        return produtoService.excluir(gestor, marcaId, id)
+                .map(inativado -> ResponseEntity.ok(ProdutoDTO.de(inativado)))
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 }

@@ -1,12 +1,14 @@
 package com.leonardoprogrammer.brandier_api.model.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
 @Table(name = "produto")
+@BatchSize(size = 50)
 public class Produto {
 
     @Id
@@ -22,6 +24,9 @@ public class Produto {
 
     @Column(length = 40)
     private String codigo;
+
+    @Column(nullable = false)
+    private boolean ativo = true;
 
     @Column(nullable = false)
     private Instant criadoEm;
@@ -72,6 +77,14 @@ public class Produto {
 
     public void setCodigo(String codigo) {
         this.codigo = codigo;
+    }
+
+    public boolean isAtivo() {
+        return ativo;
+    }
+
+    public void setAtivo(boolean ativo) {
+        this.ativo = ativo;
     }
 
     public Instant getCriadoEm() {

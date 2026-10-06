@@ -23,13 +23,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.endsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -201,7 +201,7 @@ class ProdutoControllerTests {
     @Test
     void atualizarRetornaOProdutoAtualizado() throws Exception {
         Produto atualizado = produto("Novo", "COD-2");
-        when(produtoService.atualizar(gestor, marcaId, atualizado.getId(), "Novo", "COD-2")).thenReturn(atualizado);
+        when(produtoService.atualizar(gestor, marcaId, atualizado.getId(), "Novo", "COD-2", null)).thenReturn(atualizado);
 
         mockMvc.perform(put(base + "/" + atualizado.getId()).principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -214,7 +214,7 @@ class ProdutoControllerTests {
     @Test
     void atualizarProdutoDeOutraMarcaRetorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(produtoService.atualizar(any(), eq(marcaId), eq(id), anyString(), any()))
+        when(produtoService.atualizar(any(), eq(marcaId), eq(id), anyString(), any(), any()))
                 .thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         mockMvc.perform(put(base + "/" + id).principal(autenticacao)
@@ -226,6 +226,7 @@ class ProdutoControllerTests {
     @Test
     void excluirRetorna204() throws Exception {
         UUID id = UUID.randomUUID();
+        when(produtoService.excluir(gestor, marcaId, id)).thenReturn(Optional.empty());
 
         mockMvc.perform(delete(base + "/" + id).principal(autenticacao))
                 .andExpect(status().isNoContent());
@@ -234,10 +235,34 @@ class ProdutoControllerTests {
     }
 
     @Test
+    void excluirProdutoComReposicoesRetorna200ComOProdutoInativado() throws Exception {
+        Produto inativado = produto("Sabonete", "SKU-1");
+        inativado.setAtivo(false);
+        when(produtoService.excluir(gestor, marcaId, inativado.getId())).thenReturn(Optional.of(inativado));
+
+        mockMvc.perform(delete(base + "/" + inativado.getId()).principal(autenticacao))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ativo").value(false))
+                .andExpect(jsonPath("$.nome").value("Sabonete"));
+    }
+
+    @Test
+    void atualizarComAtivoRepassaOValorAoServico() throws Exception {
+        Produto reativado = produto("Sabonete", null);
+        when(produtoService.atualizar(gestor, marcaId, reativado.getId(), "Sabonete", null, true)).thenReturn(reativado);
+
+        mockMvc.perform(put(base + "/" + reativado.getId()).principal(autenticacao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Sabonete\",\"ativo\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ativo").value(true));
+    }
+
+    @Test
     void excluirProdutoDeOutraMarcaRetorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        doThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO))
-                .when(produtoService).excluir(gestor, marcaId, id);
+        when(produtoService.excluir(gestor, marcaId, id))
+                .thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         mockMvc.perform(delete(base + "/" + id).principal(autenticacao))
                 .andExpect(status().isNotFound());

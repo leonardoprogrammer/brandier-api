@@ -3,6 +3,7 @@ package com.leonardoprogrammer.brandier_api.service;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.repository.EmailVerificationTokenRepository;
+import com.leonardoprogrammer.brandier_api.repository.ConvitePromotorRepository;
 import com.leonardoprogrammer.brandier_api.repository.PasswordResetTokenRepository;
 import com.leonardoprogrammer.brandier_api.repository.RefreshTokenRepository;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
@@ -44,6 +45,9 @@ class ExpiredDataCleanupServiceTests {
     private PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Mock
+    private ConvitePromotorRepository conviteRepository;
+
+    @Mock
     private AuthRateLimiter rateLimiter;
 
     private ExpiredDataCleanupService service;
@@ -51,7 +55,7 @@ class ExpiredDataCleanupServiceTests {
     @BeforeEach
     void preparar() {
         service = new ExpiredDataCleanupService(usuarioRepository, refreshTokenRepository,
-                emailVerificationTokenRepository, passwordResetTokenRepository, rateLimiter,
+                emailVerificationTokenRepository, passwordResetTokenRepository, conviteRepository, rateLimiter,
                 Clock.fixed(AGORA, ZoneOffset.UTC), 7);
     }
 
@@ -61,18 +65,19 @@ class ExpiredDataCleanupServiceTests {
         when(refreshTokenRepository.deleteExpired(AGORA)).thenReturn(5);
         when(emailVerificationTokenRepository.deleteExpired(AGORA)).thenReturn(2);
         when(passwordResetTokenRepository.deleteExpired(AGORA)).thenReturn(1);
+        when(conviteRepository.deleteExpired(Instant.parse("2025-12-11T03:30:00Z"))).thenReturn(4);
         when(rateLimiter.purgeExpired()).thenReturn(40);
 
         ExpiredDataCleanupService.CleanupResult resultado = service.cleanup();
 
-        assertThat(resultado).isEqualTo(new ExpiredDataCleanupService.CleanupResult(3, 5, 2, 1, 40));
+        assertThat(resultado).isEqualTo(new ExpiredDataCleanupService.CleanupResult(3, 5, 2, 1, 4, 40));
         assertThat(saida.getOut()).contains("3 conta(s) pendente(s)").contains("5 refresh token(s)");
     }
 
     @Test
     void usaOLimiteDeIdadeConfiguradoParaContasPendentes() {
         ExpiredDataCleanupService umDia = new ExpiredDataCleanupService(usuarioRepository, refreshTokenRepository,
-                emailVerificationTokenRepository, passwordResetTokenRepository, rateLimiter,
+                emailVerificationTokenRepository, passwordResetTokenRepository, conviteRepository, rateLimiter,
                 Clock.fixed(AGORA, ZoneOffset.UTC), 1);
 
         umDia.cleanup();
