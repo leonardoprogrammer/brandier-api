@@ -42,7 +42,7 @@ class MarcaServiceTests {
 
     @BeforeEach
     void preparar() {
-        marcaService = new MarcaService(marcaRepository, usuarioRepository, new LimitsProperties(2));
+        marcaService = new MarcaService(marcaRepository, usuarioRepository, new LimitsProperties(2, 5, 10));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         gestor.setEmail("gestor@exemplo.com");

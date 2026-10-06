@@ -94,8 +94,20 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `POST` | `/marcas` | Cria uma marca (`201` com `Location`) | Autenticado |
 | `PUT` | `/marcas/{id}` | Atualiza nome e descrição | Autenticado |
 | `DELETE` | `/marcas/{id}` | Exclui a marca (`204`) | Autenticado |
+| `GET` | `/marcas/{marcaId}/lojas` | Lista as lojas da marca e o limite por marca | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/lojas/{id}` | Detalha uma loja | Gestor da marca |
+| `POST` | `/marcas/{marcaId}/lojas` | Cria uma loja (`201` com `Location`) | Gestor da marca |
+| `PUT` | `/marcas/{marcaId}/lojas/{id}` | Atualiza nome, cidade, UF e endereço | Gestor da marca |
+| `DELETE` | `/marcas/{marcaId}/lojas/{id}` | Exclui a loja (`204`) | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/produtos` | Lista o catálogo da marca e o limite por marca | Gestor da marca |
+| `GET` | `/marcas/{marcaId}/produtos/{id}` | Detalha um produto | Gestor da marca |
+| `POST` | `/marcas/{marcaId}/produtos` | Cria um produto (`201` com `Location`) | Gestor da marca |
+| `PUT` | `/marcas/{marcaId}/produtos/{id}` | Atualiza nome e código | Gestor da marca |
+| `DELETE` | `/marcas/{marcaId}/produtos/{id}` | Exclui o produto (`204`) | Gestor da marca |
 
 Marca de outro usuário responde `404`. O limite de marcas por conta (`brandier.limits.max-brands-per-manager`, padrão 2) responde `409` com o código `LIMITE_MARCAS_ATINGIDO`, e o nome repetido na mesma conta, `409` com `MARCA_NOME_DUPLICADO`. A contagem é feita com **lock pessimista** na linha do usuário, então requisições paralelas não estouram o limite.
+
+Lojas e produtos seguem a mesma regra, com o lock na linha da **marca**: até 5 lojas (`brandier.limits.max-stores-per-brand`, `LIMITE_LOJAS_ATINGIDO`) e 10 produtos (`brandier.limits.max-products-per-brand`, `LIMITE_PRODUTOS_ATINGIDO`) por marca, com nome único dentro da marca (`LOJA_NOME_DUPLICADO`, `PRODUTO_NOME_DUPLICADO`). Só o gestor da marca acessa esses recursos; loja ou produto de outra marca responde `404`.
 
 A documentação interativa fica em `/api/swagger-ui.html` (e o JSON da versão em `/api/v3/api-docs/v1`).
 
