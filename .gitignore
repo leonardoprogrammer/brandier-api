@@ -31,3 +31,16 @@ build/
 
 ### VS Code ###
 .vscode/
+
+logs/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+src/main/resources/application.properties
+src/main/resources/application-*.properties
+!src/main/resources/application-example.properties
+src/main/resources/db/migration/
