@@ -89,6 +89,13 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `GET` | `/usuario/eu` | Dados do usuário autenticado | Autenticado |
 | `POST` | `/usuario/esqueci-senha` | Pede o link de redefinição de senha | Público |
 | `POST` | `/usuario/redefinir-senha` | Define a nova senha com o token do link | Público |
+| `GET` | `/marcas` | Lista as marcas do usuário e o limite por conta | Autenticado |
+| `GET` | `/marcas/{id}` | Detalha uma marca do usuário | Autenticado |
+| `POST` | `/marcas` | Cria uma marca (`201` com `Location`) | Autenticado |
+| `PUT` | `/marcas/{id}` | Atualiza nome e descrição | Autenticado |
+| `DELETE` | `/marcas/{id}` | Exclui a marca (`204`) | Autenticado |
+
+Marca de outro usuário responde `404`. O limite de marcas por conta (`brandier.limits.max-brands-per-manager`, padrão 2) responde `409` com o código `LIMITE_MARCAS_ATINGIDO`, e o nome repetido na mesma conta, `409` com `MARCA_NOME_DUPLICADO`. A contagem é feita com **lock pessimista** na linha do usuário, então requisições paralelas não estouram o limite.
 
 A documentação interativa fica em `/api/swagger-ui.html` (e o JSON da versão em `/api/v3/api-docs/v1`).
 
@@ -124,6 +131,7 @@ Segredos e dados de ambiente **não ficam no Git**: `application.properties`, `a
 | Cadastro | `brandier.verification.*`, `brandier.password-reset.*`, `brandier.email.block-disposable` |
 | Limite de tentativas | `brandier.rate-limit.*` |
 | Limpeza periódica | `brandier.cleanup.*` |
+| Limites de uso | `brandier.limits.*` |
 
 #### E-mail em desenvolvimento
 
