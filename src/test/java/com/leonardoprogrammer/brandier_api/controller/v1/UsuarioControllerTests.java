@@ -9,6 +9,7 @@ import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.ratelimit.RateLimitExceededException;
 import com.leonardoprogrammer.brandier_api.service.CadastroService;
+import com.leonardoprogrammer.brandier_api.service.GoogleLoginService;
 import com.leonardoprogrammer.brandier_api.service.RefreshTokenService;
 import com.leonardoprogrammer.brandier_api.service.UsuarioService;
 import jakarta.servlet.http.Cookie;
@@ -74,13 +75,16 @@ class UsuarioControllerTests {
     @Mock
     private TurnstileService turnstileService;
 
+    @Mock
+    private GoogleLoginService googleLoginService;
+
     private MockMvc mockMvc;
     private Usuario usuario;
 
     @BeforeEach
     void preparar() {
         AuthCookies cookies = new AuthCookies(true, 900_000, 604_800_000);
-        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService, rateLimiter, turnstileService);
+        UsuarioController controller = new UsuarioController(jwtService, usuarioService, refreshTokenService, cookies, cadastroService, rateLimiter, turnstileService, googleLoginService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -247,6 +251,56 @@ class UsuarioControllerTests {
 
         assertThat(resultado.getResponse().getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
         verify(refreshTokenService, never()).issue(any());
+    }
+
+    @Test
+    void loginDeContaSemSenhaDefinidaRetornaSenhaNaoDefinidaSemCookiesENaoAutentica() throws Exception {
+        usuario.setSenhaDefinida(false);
+        when(usuarioService.getUsuarioByEmail(EMAIL)).thenReturn(usuario);
+
+        MvcResult resultado = mockMvc.perform(post("/v1/usuario/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + EMAIL + "\",\"senha\":\"qualquer-coisa\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("SENHA_NAO_DEFINIDA"))
+                .andReturn();
+
+        assertThat(resultado.getResponse().getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
+        verify(jwtService, never()).authenticate(anyString(), anyString());
+    }
+
+    @Test
+    void entrarComGoogleCriaOuAutenticaEDefineOsCookies() throws Exception {
+        when(googleLoginService.entrarOuCriar("credencial-valida")).thenReturn(usuario);
+        UserDetails userDetails = User.withUsername(EMAIL).password("hash").authorities(List.of()).build();
+        when(usuarioService.loadUserByUsername(EMAIL)).thenReturn(userDetails);
+        when(jwtService.generateToken(userDetails)).thenReturn("jwt-de-acesso");
+        when(refreshTokenService.issue(usuario)).thenReturn("token-de-atualizacao");
+
+        MvcResult resultado = mockMvc.perform(post("/v1/usuario/entrar-google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"credential\":\"credencial-valida\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(EMAIL))
+                .andReturn();
+
+        List<String> cookies = resultado.getResponse().getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(cookies).hasSize(2);
+    }
+
+    @Test
+    void entrarComGoogleComTokenInvalidoRetorna400SemCookies() throws Exception {
+        doThrow(new BusinessRuleException(ErrorCode.GOOGLE_TOKEN_INVALIDO))
+                .when(googleLoginService).entrarOuCriar(anyString());
+
+        MvcResult resultado = mockMvc.perform(post("/v1/usuario/entrar-google")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"credential\":\"credencial-ruim\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("GOOGLE_TOKEN_INVALIDO"))
+                .andReturn();
+
+        assertThat(resultado.getResponse().getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.leonardoprogrammer.brandier_api.security.JwtService;
 import com.leonardoprogrammer.brandier_api.security.TurnstileService;
 import com.leonardoprogrammer.brandier_api.enums.StatusUsuario;
 import com.leonardoprogrammer.brandier_api.service.CadastroService;
+import com.leonardoprogrammer.brandier_api.service.GoogleLoginService;
 import com.leonardoprogrammer.brandier_api.service.RefreshTokenService;
 import com.leonardoprogrammer.brandier_api.service.UsuarioService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,6 +42,7 @@ public class UsuarioController {
     private final CadastroService cadastroService;
     private final AuthRateLimiter rateLimiter;
     private final TurnstileService turnstileService;
+    private final GoogleLoginService googleLoginService;
 
     public UsuarioController(JwtService jwtService,
                              UsuarioService usuarioService,
@@ -48,7 +50,8 @@ public class UsuarioController {
                              AuthCookies authCookies,
                              CadastroService cadastroService,
                              AuthRateLimiter rateLimiter,
-                             TurnstileService turnstileService) {
+                             TurnstileService turnstileService,
+                             GoogleLoginService googleLoginService) {
         this.jwtService = jwtService;
         this.usuarioService = usuarioService;
         this.refreshTokenService = refreshTokenService;
@@ -56,6 +59,7 @@ public class UsuarioController {
         this.cadastroService = cadastroService;
         this.rateLimiter = rateLimiter;
         this.turnstileService = turnstileService;
+        this.googleLoginService = googleLoginService;
     }
 
     @PostMapping
@@ -94,11 +98,33 @@ public class UsuarioController {
                                                    HttpServletResponse response) {
         String email = EmailCanonicalizer.normalize(requestLoginDTO.getEmail());
         rateLimiter.checkLogin(request.getRemoteAddr(), EmailCanonicalizer.canonicalize(email));
+
+        Usuario usuarioExistente = usuarioService.getUsuarioByEmail(email);
+        if (usuarioExistente != null && !usuarioExistente.isSenhaDefinida()) {
+            throw new BusinessRuleException(ErrorCode.SENHA_NAO_DEFINIDA);
+        }
+
         String accessToken = jwtService.authenticate(email, requestLoginDTO.getSenha());
         Usuario usuario = usuarioService.getUsuarioByEmail(email);
         if (usuario.getStatus() != StatusUsuario.ATIVO) {
             throw new BusinessRuleException(ErrorCode.EMAIL_NAO_VERIFICADO);
         }
+        String refreshToken = refreshTokenService.issue(usuario);
+
+        authCookies.addAccess(request, response, accessToken);
+        authCookies.addRefresh(request, response, refreshToken);
+
+        return ResponseEntity.ok(paraDTO(usuario));
+    }
+
+    @PostMapping("/entrar-google")
+    public ResponseEntity<UsuarioDTO> entrarComGoogle(@Valid @RequestBody RequestGoogleLoginDTO requisicao,
+                                                       HttpServletRequest request,
+                                                       HttpServletResponse response) {
+        rateLimiter.checkSignup(request.getRemoteAddr());
+        Usuario usuario = googleLoginService.entrarOuCriar(requisicao.credential());
+        UserDetails userDetails = usuarioService.loadUserByUsername(usuario.getEmail());
+        String accessToken = jwtService.generateToken(userDetails);
         String refreshToken = refreshTokenService.issue(usuario);
 
         authCookies.addAccess(request, response, accessToken);
@@ -146,6 +172,7 @@ public class UsuarioController {
     }
 
     private UsuarioDTO paraDTO(Usuario usuario) {
-        return new UsuarioDTO(usuario.getId().toString(), usuario.getNome(), usuario.getEmail());
+        return new UsuarioDTO(usuario.getId().toString(), usuario.getNome(), usuario.getEmail(),
+                usuario.isSenhaDefinida(), usuario.getTermosAceitosEm() != null);
     }
 }

@@ -33,6 +33,9 @@ public class Usuario {
     @Column(nullable = false)
     private boolean ativo = true;
 
+    @Column(nullable = false)
+    private boolean senhaDefinida = true;
+
     @Column
     private Instant termosAceitosEm;
 
@@ -117,6 +120,14 @@ public class Usuario {
 
     public void setAtivo(boolean ativo) {
         this.ativo = ativo;
+    }
+
+    public boolean isSenhaDefinida() {
+        return senhaDefinida;
+    }
+
+    public void setSenhaDefinida(boolean senhaDefinida) {
+        this.senhaDefinida = senhaDefinida;
     }
 
     public Instant getCriadoEm() {

@@ -65,6 +65,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(securityProblemHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(ApiVersion.V1 + "/usuario/login/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario/entrar-google").permitAll()
                         .requestMatchers(ApiVersion.V1 + "/usuario/refresh-token/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario/logout").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiVersion.V1 + "/usuario", ApiVersion.V1 + "/usuario/verificar-email", ApiVersion.V1 + "/usuario/reenviar-verificacao",

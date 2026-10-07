@@ -97,14 +97,23 @@ class ContaControllerTests {
     }
 
     @Test
-    void excluirSemSenhaRetornaErroDeValidacaoENaoChamaOServico() throws Exception {
+    void excluirSemSenhaChamaOServicoQueDecideSeExigeSenha() throws Exception {
         mockMvc.perform(post("/v1/usuario/excluir-conta").principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"senha\":\"   \"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erros[?(@.campo=='senha')]").exists());
+                .andExpect(status().isNoContent());
 
-        verify(contaService, never()).excluir(any(), anyString());
+        verify(contaService).excluir(usuario, "   ");
+    }
+
+    @Test
+    void excluirSemCampoSenhaChamaOServicoComSenhaNula() throws Exception {
+        mockMvc.perform(post("/v1/usuario/excluir-conta").principal(autenticacao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNoContent());
+
+        verify(contaService).excluir(usuario, null);
     }
 
     @Test
@@ -205,5 +214,19 @@ class ContaControllerTests {
                 .andExpect(header().string("Retry-After", "60"));
 
         verify(contaService, never()).alterarSenha(any(), anyString(), anyString());
+    }
+
+    @Test
+    void aceitarTermosDevolveOUsuarioComTermosAceitos() throws Exception {
+        Usuario atualizado = new Usuario();
+        atualizado.setId(usuario.getId());
+        atualizado.setNome("Pessoa Teste");
+        atualizado.setEmail("pessoa@exemplo.com");
+        atualizado.setTermosAceitosEm(java.time.Instant.parse("2026-01-01T12:00:00Z"));
+        when(contaService.aceitarTermos(usuario)).thenReturn(atualizado);
+
+        mockMvc.perform(post("/v1/usuario/aceitar-termos").principal(autenticacao))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.termosAceitos").value(true));
     }
 }

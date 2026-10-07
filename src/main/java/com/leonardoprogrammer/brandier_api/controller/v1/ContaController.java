@@ -57,7 +57,19 @@ public class ContaController {
                                                      Authentication authentication) {
         Usuario usuario = currentUserResolver.resolve(authentication);
         Usuario atualizado = contaService.atualizarNome(usuario, requisicao.nome());
-        return ResponseEntity.ok(new UsuarioDTO(atualizado.getId().toString(), atualizado.getNome(), atualizado.getEmail()));
+        return ResponseEntity.ok(paraDTO(atualizado));
+    }
+
+    @PostMapping("/aceitar-termos")
+    public ResponseEntity<UsuarioDTO> aceitarTermos(Authentication authentication) {
+        Usuario usuario = currentUserResolver.resolve(authentication);
+        Usuario atualizado = contaService.aceitarTermos(usuario);
+        return ResponseEntity.ok(paraDTO(atualizado));
+    }
+
+    private UsuarioDTO paraDTO(Usuario usuario) {
+        return new UsuarioDTO(usuario.getId().toString(), usuario.getNome(), usuario.getEmail(),
+                usuario.isSenhaDefinida(), usuario.getTermosAceitosEm() != null);
     }
 
     @PostMapping("/alterar-senha")

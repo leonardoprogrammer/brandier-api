@@ -45,6 +45,7 @@ public class RedefinicaoSenhaService {
     public void redefinir(String token, String novaSenha) {
         Usuario usuario = passwordResetService.consume(token);
         usuario.setSenha(passwordEncoder.encode(novaSenha));
+        usuario.setSenhaDefinida(true);
         usuarioRepository.save(usuario);
         refreshTokenService.revokeAll(usuario.getId());
     }

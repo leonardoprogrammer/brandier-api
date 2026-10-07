@@ -13,6 +13,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +27,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ContaServiceTests {
+
+    private static final Instant AGORA = Instant.parse("2026-01-01T12:00:00Z");
 
     @Mock
     private UsuarioRepository usuarioRepository;
@@ -49,7 +54,7 @@ class ContaServiceTests {
     @BeforeEach
     void preparar() {
         service = new ContaService(usuarioRepository, conviteRepository, promotorRepository, marcaService,
-                refreshTokenService, passwordEncoder);
+                refreshTokenService, passwordEncoder, Clock.fixed(AGORA, ZoneOffset.UTC));
         usuario = new Usuario();
         usuario.setId(UUID.randomUUID());
         usuario.setEmail("pessoa@exemplo.com");
@@ -95,6 +100,18 @@ class ContaServiceTests {
     }
 
     @Test
+    void comContaSemSenhaDefinidaExcluiSemExigirSenha() {
+        usuario.setSenhaDefinida(false);
+        when(passwordEncoder.encode(any())).thenReturn("hash-nova");
+
+        service.excluir(usuario, null);
+
+        verify(usuarioRepository).save(usuario);
+        assertThat(usuario.isAtivo()).isFalse();
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
     void atualizarNomeAplicaONomeSemEspacosNasPontas() {
         when(usuarioRepository.save(usuario)).thenReturn(usuario);
 
@@ -127,5 +144,38 @@ class ContaServiceTests {
         assertThat(usuario.getSenha()).isEqualTo("hash-da-senha");
         verify(usuarioRepository, never()).save(any());
         verify(refreshTokenService, never()).revokeAll(any());
+    }
+
+    @Test
+    void comContaSemSenhaDefinidaDefineANovaSenhaSemExigirASenhaAtual() {
+        usuario.setSenhaDefinida(false);
+        when(passwordEncoder.encode("SenhaNova12")).thenReturn("hash-nova-senha");
+
+        service.alterarSenha(usuario, null, "SenhaNova12");
+
+        assertThat(usuario.getSenha()).isEqualTo("hash-nova-senha");
+        assertThat(usuario.isSenhaDefinida()).isTrue();
+        verify(usuarioRepository).save(usuario);
+        verify(refreshTokenService).revokeAll(usuario.getId());
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void aceitarTermosQuandoAindaNaoAceitouMarcaAData() {
+        Usuario atualizado = service.aceitarTermos(usuario);
+
+        assertThat(atualizado.getTermosAceitosEm()).isEqualTo(AGORA);
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    void aceitarTermosQuandoJaAceitouNaoAlteraNadaNemSalvaDeNovo() {
+        Instant aceiteAnterior = Instant.parse("2025-06-01T10:00:00Z");
+        usuario.setTermosAceitosEm(aceiteAnterior);
+
+        service.aceitarTermos(usuario);
+
+        assertThat(usuario.getTermosAceitosEm()).isEqualTo(aceiteAnterior);
+        verify(usuarioRepository, never()).save(any());
     }
 }
