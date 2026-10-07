@@ -132,7 +132,7 @@ class ProdutoControllerTests {
     @Test
     void criarRetorna201ComLocationEOProduto() throws Exception {
         Produto criado = produto("Sabonete", "SKU-1");
-        when(produtoService.criar(gestor, marcaId, "Sabonete", "SKU-1")).thenReturn(criado);
+        when(produtoService.criar(gestor, marcaId, "Sabonete", "SKU-1", null)).thenReturn(criado);
 
         mockMvc.perform(post(base).principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -144,7 +144,7 @@ class ProdutoControllerTests {
 
     @Test
     void criarSemCodigoEhPermitido() throws Exception {
-        when(produtoService.criar(eq(gestor), eq(marcaId), eq("Sabonete"), any())).thenReturn(produto("Sabonete", null));
+        when(produtoService.criar(eq(gestor), eq(marcaId), eq("Sabonete"), any(), any())).thenReturn(produto("Sabonete", null));
 
         mockMvc.perform(post(base).principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -154,7 +154,7 @@ class ProdutoControllerTests {
 
     @Test
     void criarNoLimiteRetorna409ComCodigoDeLimite() throws Exception {
-        when(produtoService.criar(any(), eq(marcaId), anyString(), any()))
+        when(produtoService.criar(any(), eq(marcaId), anyString(), any(), any()))
                 .thenThrow(new BusinessRuleException(ErrorCode.LIMITE_PRODUTOS_ATINGIDO));
 
         mockMvc.perform(post(base).principal(autenticacao)
@@ -166,7 +166,7 @@ class ProdutoControllerTests {
 
     @Test
     void criarComNomeDuplicadoRetorna409() throws Exception {
-        when(produtoService.criar(any(), eq(marcaId), anyString(), any()))
+        when(produtoService.criar(any(), eq(marcaId), anyString(), any(), any()))
                 .thenThrow(new BusinessRuleException(ErrorCode.PRODUTO_NOME_DUPLICADO));
 
         mockMvc.perform(post(base).principal(autenticacao)
@@ -185,7 +185,7 @@ class ProdutoControllerTests {
                 .andExpect(jsonPath("$.codigo").value("VALIDACAO_INVALIDA"))
                 .andExpect(jsonPath("$.erros[?(@.campo=='nome')]").exists());
 
-        verify(produtoService, never()).criar(any(), any(), anyString(), any());
+        verify(produtoService, never()).criar(any(), any(), anyString(), any(), any());
     }
 
     @Test
@@ -199,9 +199,33 @@ class ProdutoControllerTests {
     }
 
     @Test
+    void criarComCorForaDoFormatoHexadecimalERejeitado() throws Exception {
+        mockMvc.perform(post(base).principal(autenticacao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Sabonete\",\"cor\":\"azul\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros[?(@.campo=='cor')]").exists());
+
+        verify(produtoService, never()).criar(any(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void criarComCorRepassaOValorAoServicoEDevolveNaResposta() throws Exception {
+        Produto criado = produto("Sabonete", null);
+        criado.setCor("#4f46e5");
+        when(produtoService.criar(gestor, marcaId, "Sabonete", null, "#4F46E5")).thenReturn(criado);
+
+        mockMvc.perform(post(base).principal(autenticacao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Sabonete\",\"cor\":\"#4F46E5\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cor").value("#4f46e5"));
+    }
+
+    @Test
     void atualizarRetornaOProdutoAtualizado() throws Exception {
         Produto atualizado = produto("Novo", "COD-2");
-        when(produtoService.atualizar(gestor, marcaId, atualizado.getId(), "Novo", "COD-2", null)).thenReturn(atualizado);
+        when(produtoService.atualizar(gestor, marcaId, atualizado.getId(), "Novo", "COD-2", null, null)).thenReturn(atualizado);
 
         mockMvc.perform(put(base + "/" + atualizado.getId()).principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -214,7 +238,7 @@ class ProdutoControllerTests {
     @Test
     void atualizarProdutoDeOutraMarcaRetorna404() throws Exception {
         UUID id = UUID.randomUUID();
-        when(produtoService.atualizar(any(), eq(marcaId), eq(id), anyString(), any(), any()))
+        when(produtoService.atualizar(any(), eq(marcaId), eq(id), anyString(), any(), any(), any()))
                 .thenThrow(new BusinessRuleException(ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         mockMvc.perform(put(base + "/" + id).principal(autenticacao)
@@ -249,7 +273,7 @@ class ProdutoControllerTests {
     @Test
     void atualizarComAtivoRepassaOValorAoServico() throws Exception {
         Produto reativado = produto("Sabonete", null);
-        when(produtoService.atualizar(gestor, marcaId, reativado.getId(), "Sabonete", null, true)).thenReturn(reativado);
+        when(produtoService.atualizar(gestor, marcaId, reativado.getId(), "Sabonete", null, null, true)).thenReturn(reativado);
 
         mockMvc.perform(put(base + "/" + reativado.getId()).principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON)

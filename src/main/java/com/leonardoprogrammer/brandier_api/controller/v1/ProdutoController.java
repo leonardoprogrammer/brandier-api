@@ -56,7 +56,8 @@ public class ProdutoController {
                                             @Valid @RequestBody RequestProdutoDTO requestProdutoDTO,
                                             Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
-        Produto produto = produtoService.criar(gestor, marcaId, requestProdutoDTO.nome(), requestProdutoDTO.codigo());
+        Produto produto = produtoService.criar(gestor, marcaId, requestProdutoDTO.nome(), requestProdutoDTO.codigo(),
+                requestProdutoDTO.cor());
         URI local = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(produto.getId()).toUri();
         return ResponseEntity.created(local).body(ProdutoDTO.de(produto));
     }
@@ -67,7 +68,7 @@ public class ProdutoController {
                                                 Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
         Produto produto = produtoService.atualizar(gestor, marcaId, id, requestProdutoDTO.nome(),
-                requestProdutoDTO.codigo(), requestProdutoDTO.ativo());
+                requestProdutoDTO.codigo(), requestProdutoDTO.cor(), requestProdutoDTO.ativo());
         return ResponseEntity.ok(ProdutoDTO.de(produto));
     }
 

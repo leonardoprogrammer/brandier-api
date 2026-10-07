@@ -87,25 +87,26 @@ class ProdutoServiceTests {
     void criarNormalizaNomeECodigoEVinculaOProdutoAMarca() {
         when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(0L);
 
-        Produto criado = produtoService.criar(gestor, marca.getId(), "  Sabonete  ", "  SKU-1 ");
+        Produto criado = produtoService.criar(gestor, marca.getId(), "  Sabonete  ", "  SKU-1 ", "#4F46E5");
 
         ArgumentCaptor<Produto> capturado = ArgumentCaptor.forClass(Produto.class);
         verify(produtoRepository).save(capturado.capture());
         assertThat(criado.getNome()).isEqualTo("Sabonete");
         assertThat(capturado.getValue().getCodigo()).isEqualTo("SKU-1");
+        assertThat(capturado.getValue().getCor()).isEqualTo("#4f46e5");
         assertThat(capturado.getValue().getMarca()).isSameAs(marca);
         assertThat(capturado.getValue().isAtivo()).isTrue();
     }
 
     @Test
-    void criarGuardaCodigoEmBrancoComoNulo() {
-        assertThat(produtoService.criar(gestor, marca.getId(), "Sabonete", "   ").getCodigo()).isNull();
-        assertThat(produtoService.criar(gestor, marca.getId(), "Shampoo", null).getCodigo()).isNull();
+    void criarGuardaCodigoECorEmBrancoComoNulo() {
+        assertThat(produtoService.criar(gestor, marca.getId(), "Sabonete", "   ", "   ").getCodigo()).isNull();
+        assertThat(produtoService.criar(gestor, marca.getId(), "Shampoo", null, null).getCor()).isNull();
     }
 
     @Test
     void criarTravaALinhaDaMarcaAntesDeContarOsProdutosAtivos() {
-        produtoService.criar(gestor, marca.getId(), "Sabonete", null);
+        produtoService.criar(gestor, marca.getId(), "Sabonete", null, null);
 
         InOrder ordem = inOrder(marcaRepository, produtoRepository);
         ordem.verify(marcaRepository).findByIdAndGestorIdForUpdate(marca.getId(), gestor.getId());
@@ -117,14 +118,14 @@ class ProdutoServiceTests {
     void criarPermiteACriacaoDoUltimoProdutoDentroDoLimite() {
         when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(9L);
 
-        assertThat(produtoService.criar(gestor, marca.getId(), "Décimo", null)).isNotNull();
+        assertThat(produtoService.criar(gestor, marca.getId(), "Décimo", null, null)).isNotNull();
     }
 
     @Test
     void criarNoLimiteDeProdutosAtivosLancaLimiteAtingidoENaoSalva() {
         when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(10L);
 
-        assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), "Décimo primeiro", null))
+        assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), "Décimo primeiro", null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.LIMITE_PRODUTOS_ATINGIDO));
 
         verify(produtoRepository, never()).save(any());
@@ -134,7 +135,7 @@ class ProdutoServiceTests {
     void criarComNomeJaUsadoNaMarcaIgnorandoMaiusculasLancaNomeDuplicado() {
         when(produtoRepository.existsByMarcaIdAndNomeIgnoreCase(marca.getId(), "Sabonete")).thenReturn(true);
 
-        assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), " Sabonete ", null))
+        assertThatThrownBy(() -> produtoService.criar(gestor, marca.getId(), " Sabonete ", null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.PRODUTO_NOME_DUPLICADO));
 
         verify(produtoRepository, never()).save(any());
@@ -145,7 +146,7 @@ class ProdutoServiceTests {
         UUID marcaAlheia = UUID.randomUUID();
         when(marcaRepository.findByIdAndGestorIdForUpdate(marcaAlheia, gestor.getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> produtoService.criar(gestor, marcaAlheia, "Sabonete", null))
+        assertThatThrownBy(() -> produtoService.criar(gestor, marcaAlheia, "Sabonete", null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
 
         verify(produtoRepository, never()).countByMarcaIdAndAtivoTrue(any());
@@ -206,10 +207,11 @@ class ProdutoServiceTests {
         existente.setAtivo(false);
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
 
-        Produto atualizado = produtoService.atualizar(gestor, marca.getId(), existente.getId(), " Novo ", " COD-2 ", null);
+        Produto atualizado = produtoService.atualizar(gestor, marca.getId(), existente.getId(), " Novo ", " COD-2 ", " #4F46E5 ", null);
 
         assertThat(atualizado.getNome()).isEqualTo("Novo");
         assertThat(atualizado.getCodigo()).isEqualTo("COD-2");
+        assertThat(atualizado.getCor()).isEqualTo("#4f46e5");
         assertThat(atualizado.isAtivo()).isFalse();
     }
 
@@ -220,7 +222,7 @@ class ProdutoServiceTests {
         when(produtoRepository.existsByMarcaIdAndNomeIgnoreCaseAndIdNot(marca.getId(), "Outro", existente.getId()))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Outro", null, null))
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Outro", null, null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.PRODUTO_NOME_DUPLICADO));
 
         verify(produtoRepository, never()).save(any());
@@ -231,7 +233,7 @@ class ProdutoServiceTests {
         UUID id = UUID.randomUUID();
         when(produtoRepository.findByIdAndMarcaId(id, marca.getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), id, "Nome", null, null))
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), id, "Nome", null, null, null))
                 .satisfies(erro -> assertErro(erro, ErrorCode.RECURSO_NAO_ENCONTRADO));
     }
 
@@ -242,7 +244,7 @@ class ProdutoServiceTests {
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
         when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(9L);
 
-        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true).isAtivo()).isTrue();
+        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, null, true).isAtivo()).isTrue();
     }
 
     @Test
@@ -252,7 +254,7 @@ class ProdutoServiceTests {
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
         when(produtoRepository.countByMarcaIdAndAtivoTrue(marca.getId())).thenReturn(10L);
 
-        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true))
+        assertThatThrownBy(() -> produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, null, true))
                 .satisfies(erro -> assertErro(erro, ErrorCode.LIMITE_PRODUTOS_ATINGIDO));
 
         assertThat(existente.isAtivo()).isFalse();
@@ -264,7 +266,7 @@ class ProdutoServiceTests {
         Produto existente = produto("Antigo");
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
 
-        produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, true);
+        produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, null, true);
 
         verify(produtoRepository, never()).countByMarcaIdAndAtivoTrue(any());
     }
@@ -274,7 +276,7 @@ class ProdutoServiceTests {
         Produto existente = produto("Antigo");
         when(produtoRepository.findByIdAndMarcaId(existente.getId(), marca.getId())).thenReturn(Optional.of(existente));
 
-        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, false).isAtivo()).isFalse();
+        assertThat(produtoService.atualizar(gestor, marca.getId(), existente.getId(), "Antigo", null, null, false).isAtivo()).isFalse();
     }
 
     @Test

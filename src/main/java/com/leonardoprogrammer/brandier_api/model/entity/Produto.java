@@ -25,6 +25,9 @@ public class Produto {
     @Column(length = 40)
     private String codigo;
 
+    @Column(length = 7)
+    private String cor;
+
     @Column(nullable = false)
     private boolean ativo = true;
 
@@ -77,6 +80,14 @@ public class Produto {
 
     public void setCodigo(String codigo) {
         this.codigo = codigo;
+    }
+
+    public String getCor() {
+        return cor;
+    }
+
+    public void setCor(String cor) {
+        this.cor = cor;
     }
 
     public boolean isAtivo() {

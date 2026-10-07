@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -57,7 +58,7 @@ public class ProdutoService {
     }
 
     @Transactional
-    public Produto criar(Usuario gestor, UUID marcaId, String nome, String codigo) {
+    public Produto criar(Usuario gestor, UUID marcaId, String nome, String codigo, String cor) {
         Marca marca = marcaRepository.findByIdAndGestorIdForUpdate(marcaId, gestor.getId())
                 .orElseThrow(ProdutoService::naoEncontrado);
 
@@ -74,11 +75,12 @@ public class ProdutoService {
         produto.setMarca(marca);
         produto.setNome(nomeNormalizado);
         produto.setCodigo(normalizarCodigo(codigo));
+        produto.setCor(normalizarCor(cor));
         return produtoRepository.save(produto);
     }
 
     @Transactional
-    public Produto atualizar(Usuario gestor, UUID marcaId, UUID id, String nome, String codigo, Boolean ativo) {
+    public Produto atualizar(Usuario gestor, UUID marcaId, UUID id, String nome, String codigo, String cor, Boolean ativo) {
         marcaRepository.findByIdAndGestorIdForUpdate(marcaId, gestor.getId()).orElseThrow(ProdutoService::naoEncontrado);
         Produto produto = buscarProduto(marcaId, id);
 
@@ -94,6 +96,7 @@ public class ProdutoService {
 
         produto.setNome(nomeNormalizado);
         produto.setCodigo(normalizarCodigo(codigo));
+        produto.setCor(normalizarCor(cor));
         if (ativo != null) {
             produto.setAtivo(ativo);
         }
@@ -124,6 +127,10 @@ public class ProdutoService {
 
     private static String normalizarCodigo(String codigo) {
         return codigo == null || codigo.isBlank() ? null : codigo.trim();
+    }
+
+    private static String normalizarCor(String cor) {
+        return cor == null || cor.isBlank() ? null : cor.trim().toLowerCase(Locale.ROOT);
     }
 
     private static BusinessRuleException naoEncontrado() {
