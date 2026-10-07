@@ -8,6 +8,10 @@ import com.leonardoprogrammer.brandier_api.model.entity.Loja;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.CurrentUserResolver;
 import com.leonardoprogrammer.brandier_api.service.LojaService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -25,6 +29,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Lojas", description = "CRUD de lojas de uma marca (limite de 5 por marca; só o gestor escreve, promotores da marca podem ler).")
 @RestController
 @RequestMapping(ApiVersion.V1 + "/marcas/{marcaId}/lojas")
 public class LojaController {
@@ -37,6 +42,7 @@ public class LojaController {
         this.currentUserResolver = currentUserResolver;
     }
 
+    @Operation(summary = "Lista as lojas da marca", description = "Disponível para o gestor e para promotores ativos da marca.")
     @GetMapping
     public ResponseEntity<LojasDaMarcaDTO> listar(@PathVariable UUID marcaId, Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
@@ -44,6 +50,7 @@ public class LojaController {
         return ResponseEntity.ok(new LojasDaMarcaDTO(lojas, lojaService.limiteDeLojas()));
     }
 
+    @Operation(summary = "Busca uma loja da marca")
     @GetMapping("/{id}")
     public ResponseEntity<LojaDTO> buscar(@PathVariable UUID marcaId, @PathVariable UUID id,
                                           Authentication authentication) {
@@ -51,6 +58,10 @@ public class LojaController {
         return ResponseEntity.ok(LojaDTO.de(lojaService.buscar(gestor, marcaId, id)));
     }
 
+    @Operation(summary = "Cria uma loja na marca", description = "Só o gestor da marca. Respeita o limite de lojas por marca; o nome é único por marca.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "LIMITE_LOJAS_ATINGIDO ou LOJA_NOME_DUPLICADO"),
+    })
     @PostMapping
     public ResponseEntity<LojaDTO> criar(@PathVariable UUID marcaId,
                                          @Valid @RequestBody RequestLojaDTO requestLojaDTO,
@@ -62,6 +73,10 @@ public class LojaController {
         return ResponseEntity.created(local).body(LojaDTO.de(loja));
     }
 
+    @Operation(summary = "Atualiza uma loja", description = "Só o gestor da marca.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "LOJA_NOME_DUPLICADO"),
+    })
     @PutMapping("/{id}")
     public ResponseEntity<LojaDTO> atualizar(@PathVariable UUID marcaId, @PathVariable UUID id,
                                              @Valid @RequestBody RequestLojaDTO requestLojaDTO,
@@ -72,6 +87,10 @@ public class LojaController {
         return ResponseEntity.ok(LojaDTO.de(loja));
     }
 
+    @Operation(summary = "Exclui uma loja", description = "Só o gestor da marca; loja com reposições registradas não pode ser excluída.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "LOJA_COM_REPOSICOES"),
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> excluir(@PathVariable UUID marcaId, @PathVariable UUID id,
                                         Authentication authentication) {

@@ -8,6 +8,10 @@ import com.leonardoprogrammer.brandier_api.model.entity.Produto;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.CurrentUserResolver;
 import com.leonardoprogrammer.brandier_api.service.ProdutoService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -25,6 +29,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Produtos", description = "Catálogo de produtos de uma marca (limite de 10 ativos por marca; só o gestor escreve, promotores da marca podem ler os ativos).")
 @RestController
 @RequestMapping(ApiVersion.V1 + "/marcas/{marcaId}/produtos")
 public class ProdutoController {
@@ -37,6 +42,7 @@ public class ProdutoController {
         this.currentUserResolver = currentUserResolver;
     }
 
+    @Operation(summary = "Lista os produtos da marca", description = "Promotores só enxergam os produtos ativos; o gestor vê todos, inclusive inativos.")
     @GetMapping
     public ResponseEntity<ProdutosDaMarcaDTO> listar(@PathVariable UUID marcaId, Authentication authentication) {
         Usuario gestor = currentUserResolver.resolve(authentication);
@@ -44,6 +50,7 @@ public class ProdutoController {
         return ResponseEntity.ok(new ProdutosDaMarcaDTO(produtos, produtoService.limiteDeProdutos()));
     }
 
+    @Operation(summary = "Busca um produto da marca")
     @GetMapping("/{id}")
     public ResponseEntity<ProdutoDTO> buscar(@PathVariable UUID marcaId, @PathVariable UUID id,
                                              Authentication authentication) {
@@ -51,6 +58,10 @@ public class ProdutoController {
         return ResponseEntity.ok(ProdutoDTO.de(produtoService.buscar(gestor, marcaId, id)));
     }
 
+    @Operation(summary = "Cria um produto no catálogo", description = "Só o gestor da marca. Respeita o limite de produtos ativos por marca; o nome é único por marca; a cor é opcional (hex `#RRGGBB`).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "LIMITE_PRODUTOS_ATINGIDO ou PRODUTO_NOME_DUPLICADO"),
+    })
     @PostMapping
     public ResponseEntity<ProdutoDTO> criar(@PathVariable UUID marcaId,
                                             @Valid @RequestBody RequestProdutoDTO requestProdutoDTO,
@@ -62,6 +73,10 @@ public class ProdutoController {
         return ResponseEntity.created(local).body(ProdutoDTO.de(produto));
     }
 
+    @Operation(summary = "Atualiza um produto, podendo reativá-lo", description = "Só o gestor da marca. Enviar `ativo: true` reativa um produto inativado, respeitando o limite (que conta só ativos).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "PRODUTO_NOME_DUPLICADO ou LIMITE_PRODUTOS_ATINGIDO (ao reativar)"),
+    })
     @PutMapping("/{id}")
     public ResponseEntity<ProdutoDTO> atualizar(@PathVariable UUID marcaId, @PathVariable UUID id,
                                                 @Valid @RequestBody RequestProdutoDTO requestProdutoDTO,
@@ -72,6 +87,7 @@ public class ProdutoController {
         return ResponseEntity.ok(ProdutoDTO.de(produto));
     }
 
+    @Operation(summary = "Exclui ou inativa um produto", description = "Só o gestor da marca. Produto sem reposições é apagado de verdade (204); produto com histórico é só inativado e volta no corpo (200), para preservar o histórico das reposições já registradas.")
     @DeleteMapping("/{id}")
     public ResponseEntity<ProdutoDTO> excluir(@PathVariable UUID marcaId, @PathVariable UUID id,
                                               Authentication authentication) {

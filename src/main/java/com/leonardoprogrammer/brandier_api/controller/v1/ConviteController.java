@@ -7,6 +7,10 @@ import com.leonardoprogrammer.brandier_api.model.entity.ConvitePromotor;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.security.CurrentUserResolver;
 import com.leonardoprogrammer.brandier_api.service.ConviteService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
+@Tag(name = "Convites", description = "Convites de promotor enviados pelo gestor de uma marca (ver \"Convites recebidos\" para o lado do convidado).")
 @RestController
 @RequestMapping(ApiVersion.V1 + "/marcas/{marcaId}/convites")
 public class ConviteController {
@@ -36,6 +41,11 @@ public class ConviteController {
         this.clock = clock;
     }
 
+    @Operation(summary = "Convida um e-mail para ser promotor da marca", description = "Só o gestor. O token do convite nunca volta na resposta; o e-mail é enviado de forma assíncrona, exista ou não conta para esse e-mail. O gestor não pode convidar o próprio e-mail.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "409", description = "LIMITE_PROMOTORES_ATINGIDO, CONVITE_JA_PENDENTE ou PROMOTOR_JA_VINCULADO"),
+            @ApiResponse(responseCode = "400", description = "CONVITE_PROPRIO_EMAIL"),
+    })
     @PostMapping
     public ResponseEntity<ConviteDTO> convidar(@PathVariable UUID marcaId,
                                                @Valid @RequestBody RequestConviteDTO requestConviteDTO,
@@ -45,6 +55,7 @@ public class ConviteController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ConviteDTO.de(convite, Instant.now(clock)));
     }
 
+    @Operation(summary = "Cancela um convite pendente", description = "Só o gestor.")
     @DeleteMapping("/{conviteId}")
     public ResponseEntity<Void> cancelar(@PathVariable UUID marcaId, @PathVariable UUID conviteId,
                                          Authentication authentication) {

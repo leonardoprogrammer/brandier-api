@@ -49,9 +49,9 @@ Pacote base: `com.leonardoprogrammer.brandier_api`.
 - **Refresh token opaco e rotativo**: guardado só como hash SHA-256, com **rotação** a cada uso. Reapresentar um token já usado revoga todas as sessões do usuário (detecção de reuso).
 - **CSRF** pelo padrão *cookie para cabeçalho* (`XSRF-TOKEN` / `X-XSRF-TOKEN`), compatível com o Angular.
 - **Senhas** com BCrypt, entre 8 e 72 caracteres (e no máximo 72 bytes, limite do BCrypt), com letras e números.
-- **Editar nome e trocar a senha pelo painel**: `PUT /usuario` (só o nome) e `POST /usuario/alterar-senha` (senha atual + nova, mesma política de senha do cadastro). Trocar a senha revoga os refresh tokens e encerra a sessão (os cookies são limpos, como na redefinição por e-mail); editar o nome não afeta a sessão. As duas rotas usam o mesmo limitador de tentativas por usuário da exclusão de conta.
+- **Editar nome e trocar a senha pelo painel**: `PUT /usuario` (só o nome) e `POST /usuario/alterar-senha` (senha atual + nova, mesma política de senha do cadastro; a senha atual só é exigida se a conta já tiver uma — ver "Login com Google" abaixo). Trocar a senha revoga os refresh tokens e encerra a sessão (os cookies são limpos, como na redefinição por e-mail); editar o nome não afeta a sessão. As duas rotas usam o mesmo limitador de tentativas por usuário da exclusão de conta.
 - **Sem enumeração de contas**: cadastro, reenvio de verificação e "esqueci minha senha" respondem sempre a mesma mensagem, exista ou não a conta.
-- **Um único tipo de conta**: não há papel global. Gestor e promotor serão papéis relativos a cada marca (em desenvolvimento), de modo que a mesma pessoa possa gerir marcas e ser promotora em outras.
+- **Um único tipo de conta**: não há papel global. Gestor e promotor são papéis relativos a cada marca, de modo que a mesma pessoa pode gerir marcas e ser promotora em outras.
 
 ### Cadastro real, sem CPF
 
@@ -59,6 +59,13 @@ Pacote base: `com.leonardoprogrammer.brandier_api`.
 - **E-mails descartáveis são bloqueados** com uma lista pública de domínios (`disposable-email-domains.txt`, licença CC0). Se o arquivo faltar, a API sobe normalmente e registra um erro no log, sem bloquear cadastros.
 - **Aliases contam como o mesmo endereço**: no Gmail, pontos e `+tag` são ignorados (e `googlemail.com` vale `gmail.com`); `+tag` também é ignorado em Outlook, iCloud, Proton e similares. Isso evita criar várias contas com uma única caixa de e-mail.
 - O aceite dos termos é registrado com data.
+
+### Login com Google e contas sem senha
+
+- Além de e-mail/senha, a conta pode entrar com o **Google** (Google Identity Services, verificação de ID token — sem OAuth2 Authorization Code e sem *client secret*). O botão aparece no front só quando `brandier.google.client-id` está preenchido.
+- `POST /usuario/entrar-google` verifica o token recebido do Google (assinatura, emissor, audiência e expiração) e exige e-mail verificado pelo Google; se a conta não existir, é criada na hora, já **ATIVA** (sem precisar verificar e-mail de novo, já que o Google verificou).
+- Uma conta criada assim nasce **sem senha** (`senha_definida=false`): tentar entrar com e-mail/senha nessa conta responde `403 SENHA_NAO_DEFINIDA`, sem sequer tentar autenticar. Definir uma senha pela primeira vez usa a mesma rota `POST /usuario/alterar-senha`, só que sem exigir a senha atual. Excluir uma conta assim (`POST /usuario/excluir-conta`) também dispensa a senha, bastando a confirmação.
+- Como a conta criada pelo Google ainda não passou pela tela de cadastro, ela nasce **sem aceitar os termos**. `POST /usuario/aceitar-termos` (autenticado, idempotente) registra o aceite; até lá, o front bloqueia o acesso ao painel e mostra uma tela só com o aceite dos termos e um botão para sair.
 
 ### Redefinição de senha
 
@@ -89,14 +96,16 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `POST` | `/usuario/verificar-email` | Confirma o e-mail com o token do link | Público |
 | `POST` | `/usuario/reenviar-verificacao` | Reenvia o link de verificação | Público |
 | `POST` | `/usuario/login` | Autentica e define os cookies de sessão | Público |
+| `POST` | `/usuario/entrar-google` | Entra ou cria a conta com o Google (ID token) | Público |
 | `POST` | `/usuario/refresh-token` | Renova a sessão (rotação do refresh token) | Cookie |
 | `POST` | `/usuario/logout` | Encerra a sessão | Público |
 | `GET` | `/usuario/eu` | Dados do usuário autenticado | Autenticado |
 | `POST` | `/usuario/esqueci-senha` | Pede o link de redefinição de senha | Público |
 | `POST` | `/usuario/redefinir-senha` | Define a nova senha com o token do link | Público |
-| `POST` | `/usuario/excluir-conta` | Exclui a própria conta, confirmando a senha | Autenticado |
+| `POST` | `/usuario/excluir-conta` | Exclui a própria conta (senha só se a conta tiver uma) | Autenticado |
 | `PUT` | `/usuario` | Atualiza o próprio nome | Autenticado |
-| `POST` | `/usuario/alterar-senha` | Troca a senha, confirmando a atual | Autenticado |
+| `POST` | `/usuario/alterar-senha` | Troca ou define a senha (senha atual só se já existir uma) | Autenticado |
+| `POST` | `/usuario/aceitar-termos` | Aceita os termos de uso (contas criadas pelo Google) | Autenticado |
 | `GET` | `/marcas` | Lista as marcas do usuário e o limite por conta | Autenticado |
 | `GET` | `/marcas/{id}` | Detalha uma marca do usuário | Autenticado |
 | `POST` | `/marcas` | Cria uma marca (`201` com `Location`) | Autenticado |
@@ -188,6 +197,7 @@ Segredos e dados de ambiente **não ficam no Git**: `application.properties`, `a
 | Limpeza periódica | `brandier.cleanup.*` |
 | Limites de uso | `brandier.limits.*` |
 | Cadastro seguro | `brandier.turnstile.*` |
+| Login com Google | `brandier.google.client-id` |
 | Convites e reposições | `brandier.invitation.*`, `brandier.replenishment.*` |
 
 #### E-mail em desenvolvimento
