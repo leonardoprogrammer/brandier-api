@@ -62,7 +62,7 @@ class CadastroServiceTests {
 
     @Test
     void cadastrarComOTetoGlobalDeContasAtingidoLancaLimiteEnaoConsultaNada() {
-        when(usuarioRepository.count()).thenReturn(100L);
+        when(usuarioRepository.countByAtivoTrue()).thenReturn(100L);
 
         assertThatThrownBy(() -> cadastroService.cadastrar("Pessoa", "pessoa@exemplo.com", "Senha1234"))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
@@ -74,7 +74,7 @@ class CadastroServiceTests {
 
     @Test
     void cadastrarComOTetoAtingidoRecusaTambemEmailQueJaTemConta() {
-        when(usuarioRepository.count()).thenReturn(150L);
+        when(usuarioRepository.countByAtivoTrue()).thenReturn(150L);
 
         assertThatThrownBy(() -> cadastroService.cadastrar("Pessoa", "ja.existe@exemplo.com", "Senha1234"))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
@@ -83,7 +83,7 @@ class CadastroServiceTests {
 
     @Test
     void cadastrarUmaContaAbaixoDoTetoFunciona() {
-        when(usuarioRepository.count()).thenReturn(99L);
+        when(usuarioRepository.countByAtivoTrue()).thenReturn(99L);
         when(usuarioRepository.findByEmailCanonico("pessoa@exemplo.com")).thenReturn(Optional.empty());
         when(emailVerificationService.issue(any())).thenReturn(Optional.of("token-bruto"));
 

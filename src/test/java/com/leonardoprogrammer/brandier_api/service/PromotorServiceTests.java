@@ -164,7 +164,7 @@ class PromotorServiceTests {
         when(promotorRepository.listarPorUsuario(usuario.getId())).thenReturn(List.of(vinculo));
 
         assertThat(service.meusVinculos(usuario)).containsExactly(
-                new VinculoPromotorDTO(marca.getId(), "Marca Alfa", "Gestor Silva", vinculo.getEntrouEm()));
+                new VinculoPromotorDTO(marca.getId(), "Marca Alfa", "Gestor Silva", true, vinculo.getEntrouEm()));
     }
 
     @Test

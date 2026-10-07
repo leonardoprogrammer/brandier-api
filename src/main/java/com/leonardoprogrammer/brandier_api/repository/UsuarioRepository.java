@@ -17,6 +17,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
 
     Optional<Usuario> findByEmailCanonico(String emailCanonico);
 
+    long countByAtivoTrue();
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from Usuario u where u.id = :id")
     Optional<Usuario> findByIdForUpdate(@Param("id") UUID id);

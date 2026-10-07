@@ -24,6 +24,9 @@ public class Marca {
     private String descricao;
 
     @Column(nullable = false)
+    private boolean ativa = true;
+
+    @Column(nullable = false)
     private Instant criadoEm;
 
     @Column
@@ -72,6 +75,14 @@ public class Marca {
 
     public void setDescricao(String descricao) {
         this.descricao = descricao;
+    }
+
+    public boolean isAtiva() {
+        return ativa;
+    }
+
+    public void setAtiva(boolean ativa) {
+        this.ativa = ativa;
     }
 
     public Instant getCriadoEm() {

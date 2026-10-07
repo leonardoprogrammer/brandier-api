@@ -5,9 +5,9 @@ import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import java.time.Instant;
 import java.util.UUID;
 
-public record MarcaDTO(UUID id, String nome, String descricao, Instant criadoEm) {
+public record MarcaDTO(UUID id, String nome, String descricao, boolean ativa, Instant criadoEm) {
 
     public static MarcaDTO de(Marca marca) {
-        return new MarcaDTO(marca.getId(), marca.getNome(), marca.getDescricao(), marca.getCriadoEm());
+        return new MarcaDTO(marca.getId(), marca.getNome(), marca.getDescricao(), marca.isAtiva(), marca.getCriadoEm());
     }
 }

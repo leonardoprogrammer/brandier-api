@@ -2,6 +2,7 @@ package com.leonardoprogrammer.brandier_api.repository;
 
 import com.leonardoprogrammer.brandier_api.model.entity.Promotor;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -32,4 +33,8 @@ public interface PromotorRepository extends JpaRepository<Promotor, UUID> {
     Optional<Promotor> findByIdAndMarcaId(UUID id, UUID marcaId);
 
     Optional<Promotor> findByMarcaIdAndUsuarioId(UUID marcaId, UUID usuarioId);
+
+    @Modifying
+    @Query("delete from Promotor p where p.usuario.id = :usuarioId")
+    int deleteByUsuarioId(@Param("usuarioId") UUID usuarioId);
 }

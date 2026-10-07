@@ -6,6 +6,7 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
+import com.leonardoprogrammer.brandier_api.repository.ReposicaoRepository;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,12 +38,16 @@ class MarcaServiceTests {
     @Mock
     private UsuarioRepository usuarioRepository;
 
+    @Mock
+    private ReposicaoRepository reposicaoRepository;
+
     private MarcaService marcaService;
     private Usuario gestor;
 
     @BeforeEach
     void preparar() {
-        marcaService = new MarcaService(marcaRepository, usuarioRepository, new LimitsProperties(2, 5, 10, 5, 500));
+        marcaService = new MarcaService(marcaRepository, usuarioRepository, reposicaoRepository,
+                new LimitsProperties(2, 5, 10, 5, 500));
         gestor = new Usuario();
         gestor.setId(UUID.randomUUID());
         gestor.setEmail("gestor@exemplo.com");
@@ -211,13 +216,28 @@ class MarcaServiceTests {
     }
 
     @Test
-    void excluirRemoveAMarcaDoGestor() {
+    void excluirRemoveAMarcaSemReposicoes() {
         Marca existente = marca("A");
         when(marcaRepository.findByIdAndGestorId(existente.getId(), gestor.getId())).thenReturn(Optional.of(existente));
+        when(reposicaoRepository.existsByMarcaId(existente.getId())).thenReturn(false);
 
         marcaService.excluir(gestor, existente.getId());
 
         verify(marcaRepository).delete(existente);
+        verify(marcaRepository, never()).save(existente);
+    }
+
+    @Test
+    void excluirApenasInativaAMarcaComReposicoes() {
+        Marca existente = marca("A");
+        when(marcaRepository.findByIdAndGestorId(existente.getId(), gestor.getId())).thenReturn(Optional.of(existente));
+        when(reposicaoRepository.existsByMarcaId(existente.getId())).thenReturn(true);
+
+        marcaService.excluir(gestor, existente.getId());
+
+        assertThat(existente.isAtiva()).isFalse();
+        verify(marcaRepository).save(existente);
+        verify(marcaRepository, never()).delete(any(Marca.class));
     }
 
     @Test
@@ -228,5 +248,21 @@ class MarcaServiceTests {
         assertThatThrownBy(() -> marcaService.excluir(gestor, id)).isInstanceOf(BusinessRuleException.class);
 
         verify(marcaRepository, never()).delete(any(Marca.class));
+    }
+
+    @Test
+    void excluirTodasDoGestorInativaAsComReposicoesEExcluiAsDemais() {
+        Marca comHistorico = marca("Com histórico");
+        Marca semHistorico = marca("Sem histórico");
+        when(marcaRepository.findAllByGestorIdOrderByNomeAsc(gestor.getId()))
+                .thenReturn(List.of(comHistorico, semHistorico));
+        when(reposicaoRepository.existsByMarcaId(comHistorico.getId())).thenReturn(true);
+        when(reposicaoRepository.existsByMarcaId(semHistorico.getId())).thenReturn(false);
+
+        marcaService.excluirTodasDoGestor(gestor.getId());
+
+        assertThat(comHistorico.isAtiva()).isFalse();
+        verify(marcaRepository).save(comHistorico);
+        verify(marcaRepository).delete(semHistorico);
     }
 }

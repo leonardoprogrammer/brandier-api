@@ -6,6 +6,7 @@ import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Marca;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.MarcaRepository;
+import com.leonardoprogrammer.brandier_api.repository.ReposicaoRepository;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +19,16 @@ public class MarcaService {
 
     private final MarcaRepository marcaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ReposicaoRepository reposicaoRepository;
     private final LimitsProperties limits;
 
     public MarcaService(MarcaRepository marcaRepository,
                         UsuarioRepository usuarioRepository,
+                        ReposicaoRepository reposicaoRepository,
                         LimitsProperties limits) {
         this.marcaRepository = marcaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.reposicaoRepository = reposicaoRepository;
         this.limits = limits;
     }
 
@@ -78,7 +82,21 @@ public class MarcaService {
 
     @Transactional
     public void excluir(Usuario gestor, UUID id) {
-        marcaRepository.delete(buscar(gestor, id));
+        inativarOuExcluir(buscar(gestor, id));
+    }
+
+    @Transactional
+    public void excluirTodasDoGestor(UUID gestorId) {
+        marcaRepository.findAllByGestorIdOrderByNomeAsc(gestorId).forEach(this::inativarOuExcluir);
+    }
+
+    private void inativarOuExcluir(Marca marca) {
+        if (reposicaoRepository.existsByMarcaId(marca.getId())) {
+            marca.setAtiva(false);
+            marcaRepository.save(marca);
+            return;
+        }
+        marcaRepository.delete(marca);
     }
 
     private static String normalizarNome(String nome) {

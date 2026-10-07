@@ -108,7 +108,7 @@ class ConviteRecebidoControllerTests {
     @Test
     void aceitarDevolveOVinculoCriado() throws Exception {
         when(conviteService.aceitar(usuario, "abc")).thenReturn(new VinculoPromotorDTO(
-                marca.getId(), "Marca Alfa", "Gestor Silva", Instant.parse("2026-03-01T12:00:00Z")));
+                marca.getId(), "Marca Alfa", "Gestor Silva", true, Instant.parse("2026-03-01T12:00:00Z")));
 
         mockMvc.perform(post("/v1/convites/aceitar").principal(autenticacao)
                         .contentType(MediaType.APPLICATION_JSON).content(CORPO))
@@ -177,7 +177,7 @@ class ConviteRecebidoControllerTests {
     void aceitarPorIdDevolveOVinculoCriado() throws Exception {
         UUID id = UUID.randomUUID();
         when(conviteService.aceitarPorId(usuario, id)).thenReturn(new VinculoPromotorDTO(
-                marca.getId(), "Marca Alfa", "Gestor Silva", Instant.parse("2026-03-01T12:00:00Z")));
+                marca.getId(), "Marca Alfa", "Gestor Silva", true, Instant.parse("2026-03-01T12:00:00Z")));
 
         mockMvc.perform(post("/v1/convites/" + id + "/aceitar").principal(autenticacao))
                 .andExpect(status().isOk())

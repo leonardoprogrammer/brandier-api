@@ -47,7 +47,7 @@ public class CadastroService {
 
     @Transactional
     public void cadastrar(String nome, String email, String senha) {
-        if (usuarioRepository.count() >= limits.maxAccounts()) {
+        if (usuarioRepository.countByAtivoTrue() >= limits.maxAccounts()) {
             throw new BusinessRuleException(ErrorCode.LIMITE_CONTAS_ATINGIDO);
         }
 

@@ -29,6 +29,7 @@ public enum ErrorCode {
     CONVITE_PROPRIO_EMAIL(HttpStatus.BAD_REQUEST, "Convite inválido", "Você não pode convidar o seu próprio e-mail: o gestor já pode registrar reposições na marca."),
     TOKEN_CONVITE_INVALIDO(HttpStatus.BAD_REQUEST, "Convite inválido", "O convite é inválido, expirou, já foi respondido ou foi enviado para outro e-mail."),
     LOJA_COM_REPOSICOES(HttpStatus.CONFLICT, "Loja com reposições", "Esta loja já tem reposições registradas e não pode ser excluída."),
+    MARCA_INATIVA(HttpStatus.CONFLICT, "Marca inativa", "Esta marca foi encerrada porque a conta do gestor foi excluída e não aceita novas reposições."),
     REPOSICAO_SEM_ITENS(HttpStatus.BAD_REQUEST, "Reposição sem itens", "Informe ao menos um produto na reposição."),
     QUANTIDADE_INVALIDA(HttpStatus.BAD_REQUEST, "Quantidade inválida", "A quantidade de cada produto deve ser maior que zero."),
     PRODUTO_REPETIDO(HttpStatus.BAD_REQUEST, "Produto repetido", "O mesmo produto não pode aparecer duas vezes na mesma reposição."),

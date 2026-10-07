@@ -4,11 +4,11 @@ import com.leonardoprogrammer.brandier_api.exception.BusinessRuleException;
 import com.leonardoprogrammer.brandier_api.exception.ErrorCode;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.repository.ConvitePromotorRepository;
+import com.leonardoprogrammer.brandier_api.repository.PromotorRepository;
 import com.leonardoprogrammer.brandier_api.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,7 +18,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -33,6 +32,15 @@ class ContaServiceTests {
     private ConvitePromotorRepository conviteRepository;
 
     @Mock
+    private PromotorRepository promotorRepository;
+
+    @Mock
+    private MarcaService marcaService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private ContaService service;
@@ -40,7 +48,8 @@ class ContaServiceTests {
 
     @BeforeEach
     void preparar() {
-        service = new ContaService(usuarioRepository, conviteRepository, passwordEncoder);
+        service = new ContaService(usuarioRepository, conviteRepository, promotorRepository, marcaService,
+                refreshTokenService, passwordEncoder);
         usuario = new Usuario();
         usuario.setId(UUID.randomUUID());
         usuario.setEmail("pessoa@exemplo.com");
@@ -49,25 +58,39 @@ class ContaServiceTests {
     }
 
     @Test
-    void comASenhaCertaApagaOsConvitesRecebidosEDepoisOUsuario() {
+    void comASenhaCertaAnonimizaOUsuarioELimpaOQueDependeDele() {
         when(passwordEncoder.matches("Senha1234", "hash-da-senha")).thenReturn(true);
+        when(passwordEncoder.encode(any())).thenReturn("hash-nova");
 
         service.excluir(usuario, "Senha1234");
 
-        InOrder ordem = inOrder(conviteRepository, usuarioRepository);
-        ordem.verify(conviteRepository).deleteByEmailCanonico("pessoa@exemplo.com");
-        ordem.verify(usuarioRepository).delete(usuario);
+        verify(conviteRepository).deleteByEmailCanonico("pessoa@exemplo.com");
+        verify(promotorRepository).deleteByUsuarioId(usuario.getId());
+        verify(marcaService).excluirTodasDoGestor(usuario.getId());
+        verify(refreshTokenService).revokeAll(usuario.getId());
+        verify(usuarioRepository, never()).delete(any());
+        verify(usuarioRepository).save(usuario);
+
+        assertThat(usuario.isAtivo()).isFalse();
+        assertThat(usuario.getEmail()).isEqualTo(usuario.getEmailCanonico());
+        assertThat(usuario.getEmail()).contains(usuario.getId().toString()).endsWith("@removido.brandier");
+        assertThat(usuario.getSenha()).isEqualTo("hash-nova");
     }
 
     @Test
-    void comASenhaErradaLancaSenhaIncorretaENaoApagaNada() {
+    void comASenhaErradaLancaSenhaIncorretaENaoAlteraNada() {
         when(passwordEncoder.matches("errada", "hash-da-senha")).thenReturn(false);
 
         assertThatThrownBy(() -> service.excluir(usuario, "errada"))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
                         erro -> assertThat(erro.getErrorCode()).isEqualTo(ErrorCode.SENHA_INCORRETA));
 
-        verify(usuarioRepository, never()).delete(any());
+        assertThat(usuario.isAtivo()).isTrue();
+        assertThat(usuario.getEmail()).isEqualTo("pessoa@exemplo.com");
+        verify(usuarioRepository, never()).save(any());
         verify(conviteRepository, never()).deleteByEmailCanonico(any());
+        verify(promotorRepository, never()).deleteByUsuarioId(any());
+        verify(marcaService, never()).excluirTodasDoGestor(any());
+        verify(refreshTokenService, never()).revokeAll(any());
     }
 }

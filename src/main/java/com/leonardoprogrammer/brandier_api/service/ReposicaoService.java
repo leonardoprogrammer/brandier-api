@@ -65,6 +65,9 @@ public class ReposicaoService {
     public ReposicaoDTO criar(Usuario usuario, UUID marcaId, UUID lojaId, Instant repostoEm,
                               List<ItemEntrada> itens, String observacoes) {
         MarcaAcessoService.Acesso acesso = acessoService.exigir(usuario, marcaId);
+        if (!acesso.marca().isAtiva()) {
+            throw new BusinessRuleException(ErrorCode.MARCA_INATIVA);
+        }
         Instant agora = Instant.now(clock);
 
         Reposicao reposicao = new Reposicao();

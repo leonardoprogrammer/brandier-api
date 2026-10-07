@@ -284,6 +284,16 @@ class ReposicaoServiceTests {
     }
 
     @Test
+    void criarEmMarcaInativaLancaMarcaInativaENaoSalva() {
+        marca.setAtiva(false);
+
+        assertThatThrownBy(() -> service.criar(promotor, marca.getId(), loja.getId(), null, List.of(item(sabonete, 1)), null))
+                .satisfies(erro -> assertErro(erro, ErrorCode.MARCA_INATIVA));
+
+        verify(reposicaoRepository, never()).save(any());
+    }
+
+    @Test
     void promotorAtualizaAPropriaReposicaoDentroDaJanelaTrocandoRemovendoEAdicionandoItens() {
         Reposicao reposicao = existente(promotor, AGORA.minus(Duration.ofHours(23)), item(sabonete, 10), item(antigo, 3));
         Loja outraLoja = new Loja();

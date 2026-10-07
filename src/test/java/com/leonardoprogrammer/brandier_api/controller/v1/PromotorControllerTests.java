@@ -161,7 +161,7 @@ class PromotorControllerTests {
     @Test
     void meusVinculosDevolveAsMarcasOndeOUsuarioEPromotor() throws Exception {
         when(promotorService.meusVinculos(gestor)).thenReturn(List.of(new VinculoPromotorDTO(
-                marca.getId(), "Marca Alfa", "Gestor Silva", AGORA)));
+                marca.getId(), "Marca Alfa", "Gestor Silva", true, AGORA)));
 
         mockMvc.perform(get("/v1/promotores/eu").principal(autenticacao))
                 .andExpect(status().isOk())

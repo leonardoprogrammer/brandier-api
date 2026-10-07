@@ -30,6 +30,9 @@ public class Usuario {
     @Column(nullable = false, length = 20)
     private StatusUsuario status = StatusUsuario.PENDENTE;
 
+    @Column(nullable = false)
+    private boolean ativo = true;
+
     @Column
     private Instant termosAceitosEm;
 
@@ -106,6 +109,14 @@ public class Usuario {
 
     public void setStatus(StatusUsuario status) {
         this.status = status;
+    }
+
+    public boolean isAtivo() {
+        return ativo;
+    }
+
+    public void setAtivo(boolean ativo) {
+        this.ativo = ativo;
     }
 
     public Instant getCriadoEm() {
