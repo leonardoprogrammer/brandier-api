@@ -49,6 +49,7 @@ Pacote base: `com.leonardoprogrammer.brandier_api`.
 - **Refresh token opaco e rotativo**: guardado só como hash SHA-256, com **rotação** a cada uso. Reapresentar um token já usado revoga todas as sessões do usuário (detecção de reuso).
 - **CSRF** pelo padrão *cookie para cabeçalho* (`XSRF-TOKEN` / `X-XSRF-TOKEN`), compatível com o Angular.
 - **Senhas** com BCrypt, entre 8 e 72 caracteres (e no máximo 72 bytes, limite do BCrypt), com letras e números.
+- **Editar nome e trocar a senha pelo painel**: `PUT /usuario` (só o nome) e `POST /usuario/alterar-senha` (senha atual + nova, mesma política de senha do cadastro). Trocar a senha revoga os refresh tokens e encerra a sessão (os cookies são limpos, como na redefinição por e-mail); editar o nome não afeta a sessão. As duas rotas usam o mesmo limitador de tentativas por usuário da exclusão de conta.
 - **Sem enumeração de contas**: cadastro, reenvio de verificação e "esqueci minha senha" respondem sempre a mesma mensagem, exista ou não a conta.
 - **Um único tipo de conta**: não há papel global. Gestor e promotor serão papéis relativos a cada marca (em desenvolvimento), de modo que a mesma pessoa possa gerir marcas e ser promotora em outras.
 
@@ -65,6 +66,10 @@ Pacote base: `com.leonardoprogrammer.brandier_api`.
 - Trocar a senha **encerra todas as sessões** da conta.
 
 ### Proteção contra abuso
+
+- **Cloudflare Turnstile** no cadastro (`brandier.turnstile.*`): o front envia o token do widget em `turnstileToken` e a API o confirma no Cloudflare antes de criar a conta. Desligado por padrão (`brandier.turnstile.enabled=false`); ao ligar, `brandier.turnstile.secret-key` é obrigatória e a API não sobe sem ela. Se o Cloudflare estiver fora do ar ou responder erro, o cadastro é recusado (`CAPTCHA_INVALIDO`), nunca liberado. Para testar localmente, o Cloudflare publica chaves de teste (as de "sempre passa" e "sempre falha").
+- **Teto global de contas** (`brandier.limits.max-accounts`, padrão 500): ao atingir o limite, todo cadastro responde `409 LIMITE_CONTAS_ATINGIDO`, inclusive o de e-mails que já têm conta, para não revelar quem está cadastrado. A contagem inclui contas pendentes (que a limpeza periódica apaga em 7 dias) e pode passar do teto por alguns cadastros simultâneos.
+- **Exclusão da própria conta** (`POST /usuario/excluir-conta`, com a senha no corpo): não apaga a conta de verdade, para não quebrar relatórios de terceiros — apaga os convites pendentes enviados ao e-mail dela e os seus vínculos de promotor em marcas de outros gestores, e **anonimiza** a conta (e-mail e senha trocados por valores que não batem mais com nada; o e-mail original fica livre para um novo cadastro; o nome é mantido, para que reposições já registradas continuem identificando o autor). As marcas que ela gerencia são apagadas (com lojas, produtos, promotores e convites) quando nunca tiveram reposições, ou ficam **inativas** (sem novos convites, produtos ou reposições) quando já têm histórico, preservando os dados de quem promoveu nelas. Limita as tentativas por usuário e encerra a sessão (limpa os cookies).
 
 - **Limite de tentativas** em memória, por janela fixa, por IP e por e-mail (login, cadastro, reenvio, redefinição). Ao exceder, responde `429` com o cabeçalho `Retry-After`. Os limites são configuráveis.
 - **Limpeza periódica** (`@Scheduled`): remove contas pendentes antigas (7 dias, configurável) e tokens expirados.
@@ -89,6 +94,9 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `GET` | `/usuario/eu` | Dados do usuário autenticado | Autenticado |
 | `POST` | `/usuario/esqueci-senha` | Pede o link de redefinição de senha | Público |
 | `POST` | `/usuario/redefinir-senha` | Define a nova senha com o token do link | Público |
+| `POST` | `/usuario/excluir-conta` | Exclui a própria conta, confirmando a senha | Autenticado |
+| `PUT` | `/usuario` | Atualiza o próprio nome | Autenticado |
+| `POST` | `/usuario/alterar-senha` | Troca a senha, confirmando a atual | Autenticado |
 | `GET` | `/marcas` | Lista as marcas do usuário e o limite por conta | Autenticado |
 | `GET` | `/marcas/{id}` | Detalha uma marca do usuário | Autenticado |
 | `POST` | `/marcas` | Cria uma marca (`201` com `Location`) | Autenticado |
@@ -102,7 +110,7 @@ Todos sob `/api/v1`. As requisições `POST` exigem o cabeçalho `X-XSRF-TOKEN` 
 | `GET` | `/marcas/{marcaId}/produtos` | Lista o catálogo da marca (promotores veem só os ativos) | Gestor ou promotor da marca |
 | `GET` | `/marcas/{marcaId}/produtos/{id}` | Detalha um produto | Gestor da marca |
 | `POST` | `/marcas/{marcaId}/produtos` | Cria um produto (`201` com `Location`) | Gestor da marca |
-| `PUT` | `/marcas/{marcaId}/produtos/{id}` | Atualiza nome, código e, opcionalmente, `ativo` (reativa) | Gestor da marca |
+| `PUT` | `/marcas/{marcaId}/produtos/{id}` | Atualiza nome, código, cor e, opcionalmente, `ativo` (reativa) | Gestor da marca |
 | `DELETE` | `/marcas/{marcaId}/produtos/{id}` | Exclui o produto (`204`) ou, se já tem reposições, inativa (`200`) | Gestor da marca |
 | `GET` | `/marcas/{marcaId}/promotores` | Promotores, convites e uso do limite | Gestor da marca |
 | `DELETE` | `/marcas/{marcaId}/promotores/{id}` | Remove o promotor da marca (`204`) | Gestor da marca |
@@ -136,7 +144,9 @@ Lojas e produtos seguem a mesma regra, com o lock na linha da **marca**: até 5 
 
 O convidado também vê os convites pendentes dentro da plataforma (`GET /convites/recebidos`) e responde pelo id, com as mesmas regras do link do e-mail: só a conta com o e-mail convidado enxerga e responde, e qualquer outro id responde `404`.
 
-**Reposições.** Uma reposição tem loja, data e hora, itens (produto + quantidade inteira maior que zero, sem repetir produto) e observações. O gestor altera e exclui qualquer reposição da marca; o promotor, só as próprias e até 24 horas depois do registro (`brandier.replenishment.edit-window-hours`), caso contrário `403 JANELA_EDICAO_ENCERRADA`. Produto com reposições não é excluído: fica inativo e deixa de contar no limite. Loja com reposições não pode ser excluída (`409 LOJA_COM_REPOSICOES`).
+**Produtos.** `cor` é opcional, no formato hexadecimal `#RRGGBB` (ex.: `#4F46E5`); guardada em minúsculas, usada pelo front para destacar o produto no formulário de reposição.
+
+**Reposições.** Uma reposição tem loja, data e hora, itens (produto + quantidade inteira maior que zero, sem repetir produto) e observações. O gestor altera e exclui qualquer reposição da marca; o promotor, só as próprias e até 24 horas depois do registro (`brandier.replenishment.edit-window-hours`), caso contrário `403 JANELA_EDICAO_ENCERRADA`. Produto com reposições não é excluído: fica inativo e deixa de contar no limite. Loja com reposições não pode ser excluída (`409 LOJA_COM_REPOSICOES`). Marca com reposições também não é excluída (nem ao excluir a conta do gestor): fica **inativa**, sem aceitar novas reposições (`409 MARCA_INATIVA`), mas continua visível nos relatórios de quem já promoveu nela.
 
 **Painel e relatórios.** Os totais e rankings são calculados no banco (`GROUP BY`), nunca em memória. O período é `de` (inclusive) e `ate` (exclusivo), com padrão de 30 dias e máximo de 366. O relatório combina filtros (loja, promotor, produto, período), pagina no servidor e ordena por data, loja ou autor; o promotor só enxerga as próprias reposições. O CSV usa UTF-8 com BOM, separador `;` e uma linha por item, neutraliza células que começam com `=`, `+`, `-` ou `@` (injeção de fórmula) e recusa exportar mais de 5.000 reposições de uma vez.
 
@@ -177,6 +187,7 @@ Segredos e dados de ambiente **não ficam no Git**: `application.properties`, `a
 | Limite de tentativas | `brandier.rate-limit.*` |
 | Limpeza periódica | `brandier.cleanup.*` |
 | Limites de uso | `brandier.limits.*` |
+| Cadastro seguro | `brandier.turnstile.*` |
 | Convites e reposições | `brandier.invitation.*`, `brandier.replenishment.*` |
 
 #### E-mail em desenvolvimento
@@ -200,3 +211,7 @@ Testes unitários com JUnit 5, Mockito e AssertJ, sem depender de banco, de rede
 ```
 
 Testes de integração (com Testcontainers) serão adicionados quando o projeto passar a usar Docker.
+
+## Licença
+
+Código sob a [licença MIT](LICENSE): você pode usar, copiar, modificar e distribuir. A instância online da demonstração continua sem fins comerciais.
