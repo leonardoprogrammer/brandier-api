@@ -34,6 +34,10 @@ public class AuthRateLimiter {
         consume("delete-account:user:" + userKey, properties.recoveryEmail(), defaultWindow());
     }
 
+    public void checkPasswordChange(String userKey) {
+        consume("change-password:user:" + userKey, properties.recoveryEmail(), defaultWindow());
+    }
+
     public void checkToken(String operation, String ip) {
         consume(operation + ":ip:" + ip, properties.tokenIp(), defaultWindow());
     }

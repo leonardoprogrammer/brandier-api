@@ -54,4 +54,21 @@ public class ContaService {
         usuario.setAtivo(false);
         usuarioRepository.save(usuario);
     }
+
+    @Transactional
+    public Usuario atualizarNome(Usuario usuario, String nome) {
+        usuario.setNome(nome.trim());
+        return usuarioRepository.save(usuario);
+    }
+
+    @Transactional
+    public void alterarSenha(Usuario usuario, String senhaAtual, String novaSenha) {
+        if (!passwordEncoder.matches(senhaAtual, usuario.getSenha())) {
+            throw new BusinessRuleException(ErrorCode.SENHA_INCORRETA);
+        }
+
+        usuario.setSenha(passwordEncoder.encode(novaSenha));
+        usuarioRepository.save(usuario);
+        refreshTokenService.revokeAll(usuario.getId());
+    }
 }

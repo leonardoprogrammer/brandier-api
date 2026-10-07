@@ -93,4 +93,39 @@ class ContaServiceTests {
         verify(marcaService, never()).excluirTodasDoGestor(any());
         verify(refreshTokenService, never()).revokeAll(any());
     }
+
+    @Test
+    void atualizarNomeAplicaONomeSemEspacosNasPontas() {
+        when(usuarioRepository.save(usuario)).thenReturn(usuario);
+
+        Usuario atualizado = service.atualizarNome(usuario, "  Novo Nome  ");
+
+        assertThat(atualizado.getNome()).isEqualTo("Novo Nome");
+        verify(usuarioRepository).save(usuario);
+    }
+
+    @Test
+    void alterarSenhaComASenhaAtualCertaTrocaOHashERevogaOsRefreshTokens() {
+        when(passwordEncoder.matches("SenhaAtual1", "hash-da-senha")).thenReturn(true);
+        when(passwordEncoder.encode("SenhaNova12")).thenReturn("hash-nova-senha");
+
+        service.alterarSenha(usuario, "SenhaAtual1", "SenhaNova12");
+
+        assertThat(usuario.getSenha()).isEqualTo("hash-nova-senha");
+        verify(usuarioRepository).save(usuario);
+        verify(refreshTokenService).revokeAll(usuario.getId());
+    }
+
+    @Test
+    void alterarSenhaComASenhaAtualErradaLancaSenhaIncorretaENaoAlteraNada() {
+        when(passwordEncoder.matches("errada", "hash-da-senha")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.alterarSenha(usuario, "errada", "SenhaNova12"))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        erro -> assertThat(erro.getErrorCode()).isEqualTo(ErrorCode.SENHA_INCORRETA));
+
+        assertThat(usuario.getSenha()).isEqualTo("hash-da-senha");
+        verify(usuarioRepository, never()).save(any());
+        verify(refreshTokenService, never()).revokeAll(any());
+    }
 }

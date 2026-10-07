@@ -1,7 +1,10 @@
 package com.leonardoprogrammer.brandier_api.controller.v1;
 
 import com.leonardoprogrammer.brandier_api.config.ApiVersion;
+import com.leonardoprogrammer.brandier_api.model.dto.RequestAlterarSenhaDTO;
+import com.leonardoprogrammer.brandier_api.model.dto.RequestAtualizarNomeDTO;
 import com.leonardoprogrammer.brandier_api.model.dto.RequestExcluirContaDTO;
+import com.leonardoprogrammer.brandier_api.model.dto.UsuarioDTO;
 import com.leonardoprogrammer.brandier_api.model.entity.Usuario;
 import com.leonardoprogrammer.brandier_api.ratelimit.AuthRateLimiter;
 import com.leonardoprogrammer.brandier_api.security.AuthCookies;
@@ -13,6 +16,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +48,26 @@ public class ContaController {
         Usuario usuario = currentUserResolver.resolve(authentication);
         rateLimiter.checkAccountDeletion(usuario.getId().toString());
         contaService.excluir(usuario, requisicao.senha());
+        authCookies.clear(request, response);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping
+    public ResponseEntity<UsuarioDTO> atualizarNome(@Valid @RequestBody RequestAtualizarNomeDTO requisicao,
+                                                     Authentication authentication) {
+        Usuario usuario = currentUserResolver.resolve(authentication);
+        Usuario atualizado = contaService.atualizarNome(usuario, requisicao.nome());
+        return ResponseEntity.ok(new UsuarioDTO(atualizado.getId().toString(), atualizado.getNome(), atualizado.getEmail()));
+    }
+
+    @PostMapping("/alterar-senha")
+    public ResponseEntity<Void> alterarSenha(@Valid @RequestBody RequestAlterarSenhaDTO requisicao,
+                                             Authentication authentication,
+                                             HttpServletRequest request,
+                                             HttpServletResponse response) {
+        Usuario usuario = currentUserResolver.resolve(authentication);
+        rateLimiter.checkPasswordChange(usuario.getId().toString());
+        contaService.alterarSenha(usuario, requisicao.senhaAtual(), requisicao.novaSenha());
         authCookies.clear(request, response);
         return ResponseEntity.noContent().build();
     }

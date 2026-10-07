@@ -109,6 +109,16 @@ class AuthRateLimiterTests {
     }
 
     @Test
+    void alteracaoDeSenhaLimitaPorUsuarioENaoAfetaOutros() {
+        authRateLimiter.checkPasswordChange("usuario-1");
+        authRateLimiter.checkPasswordChange("usuario-1");
+
+        assertThatThrownBy(() -> authRateLimiter.checkPasswordChange("usuario-1"))
+                .isInstanceOf(RateLimitExceededException.class);
+        assertThatCode(() -> authRateLimiter.checkPasswordChange("usuario-2")).doesNotThrowAnyException();
+    }
+
+    @Test
     void desabilitadoNuncaBloqueiaENuncaRegistra() {
         AuthRateLimiter desabilitado = new AuthRateLimiter(propriedades(false), limitador);
 
