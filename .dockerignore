@@ -1,0 +1,14 @@
+.git
+.gitignore
+.idea
+.vscode
+target
+logs
+*.log
+.env
+.env.*
+src/main/resources/application.properties
+src/main/resources/application-*.properties
+!src/main/resources/application-example.properties
+src/main/resources/db/migration
+README.md
